@@ -8,7 +8,7 @@ BINARY = $(NAME)
 SRC = colorswirl.c
 LIBS = -lm
 
-CFLAGS = -std=c99 -Wall -Wextra
+CFLAGS = -std=c99 -Wall -Wextra -DVERSION=$(VERSION)
 
 all:
 	$(CC) $(CFLAGS) -O2 $(SRC) -o $(BINARY) $(LIBS)

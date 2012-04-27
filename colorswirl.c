@@ -17,16 +17,9 @@ the serial port device name, e.g.:
 #include "colorswirl.h"
 
 int main(int argc, char *argv[]) {
-    int fd;
-    int bytesToGo;
-    int bytesSent;
-    int totalBytesSent = 0;
-    int frame = 0;
     int hue1;
     int hue2;
-    int i;
     int brightness;
-
     unsigned char lo;
     unsigned char r;
     unsigned char g;
@@ -35,18 +28,16 @@ int main(int argc, char *argv[]) {
     double sine1;
     double sine2;
     
-    time_t t;
-    time_t start;
-    time_t prev;
-    
-    struct termios tty;
-    char c;                    // Char for processing command line args
-    int optIndex;              // Index of long opts for processing command line args
-    char *device;
+    int fd;                // File descriptor of the open device
+    char *device;          // The device to send LED info to
+
+    char c;                // Char for processing command line args
+    int optIndex;          // Index of long opts for processing command line args
 
     unsigned char buffer[6 + (N_LEDS * 3)]; // Header + 3 bytes per LED
 
     prog = argv[0];
+    startTime = prevTime = time(NULL);
 
     // Valid long options
     static struct option longOpts[] = {
@@ -77,6 +68,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Get the device we're using
     if(argc >= optind) {
     	device = argv[optind];
 	} else {
@@ -84,23 +76,13 @@ int main(int argc, char *argv[]) {
 		return ABNORMAL_EXIT;
 	}
 
-    if((fd = open(device, O_RDWR | O_NOCTTY | O_NONBLOCK)) < 0) {
-        fprintf(stderr, "%s: Can't open device '%s'.\n", prog, device);
-        return 1;
+    // Open the device
+    if((fd = openTTY(device)) == -1) {
+        exit(ABNORMAL_EXIT);
     }
-    // Serial port config swiped from RXTX library (rxtx.qbang.org):
-    tcgetattr(fd, &tty);
-    tty.c_iflag = INPCK;
-    tty.c_lflag = 0;
-    tty.c_oflag = 0;
-    tty.c_cflag = CREAD | CS8 | CLOCAL;
-    tty.c_cc[VMIN] = 0;
-    tty.c_cc[VTIME] = 0;
-    cfsetispeed(&tty, B115200);
-    cfsetospeed(&tty, B115200);
-    tcsetattr(fd, TCSANOW, &tty);
 
-    bzero(buffer, sizeof(buffer));  // Clear LED buffer
+    // Clear LED buffer
+    memset(buffer, 0, sizeof(buffer));
 
     // Header only needs to be initialized once, not
     // inside rendering loop -- number of LEDs is constant:
@@ -113,7 +95,6 @@ int main(int argc, char *argv[]) {
 
     sine1 = 0.0;
     hue1 = 0;
-    prev = start = time(NULL);  // For bandwidth statistics
 
     while(1) {
         sine2 = sine1;
@@ -182,37 +163,80 @@ int main(int argc, char *argv[]) {
 
         // Slowly rotate hue and brightness in opposite directions
         hue1 = (hue1 + 5) % 1536;
-        sine1 -= .009;
+        sine1 -= .03;
 
-        // Issue color data to LEDs.  Each OS is fussy in different
-        // ways about serial output.  This arrangement of drain-and-
-        // write-loop seems to be the most relable across platforms:
-        tcdrain(fd);
-        for(bytesSent = 0, bytesToGo = sizeof(buffer); bytesToGo > 0;) {
-            if(verbose >= TPL_VERBOSE) {
-                //printf("Sending byte: %s\n", "");
-            }
-
-            if((i = write(fd, &buffer[bytesSent], bytesToGo)) > 0) {
-                bytesToGo -= i;
-                bytesSent += i;
-            }
-        }
-        // Keep track of byte and frame counts for statistics
-        totalBytesSent += sizeof(buffer);
-        frame++;
-
-        // Update statistics once per second
-        if((t = time(NULL)) != prev) {
-        	if(verbose > VERBOSE) {
-            	printf("Average frames/sec: %d, bytes/sec: %d\n", (int)((float)frame / (float)(t - start)), (int)((float)totalBytesSent / (float)(t - start)));
-        	}
-            prev = t;
-        }
+        // Send the data to the buffer
+        sendBuffer(buffer, sizeof(buffer), fd);
     }
 
     close(fd);
     return 0;
+}
+
+
+int openTTY(char *device) {
+    int fd = -1;
+    struct termios tty;
+
+    // Try to open the device
+    if((fd = open(device, O_RDWR | O_NOCTTY | O_NONBLOCK)) == -1) {
+        fprintf(stderr, "%s: Error opening device \"%s\": %s\n", prog, device, strerror(errno));
+        return -1;
+    }
+
+    // Serial port config swiped from RXTX library (rxtx.qbang.org):
+    tcgetattr(fd, &tty);
+    tty.c_iflag = INPCK;
+    tty.c_lflag = 0;
+    tty.c_oflag = 0;
+    tty.c_cflag = CREAD | CS8 | CLOCAL;
+    tty.c_cc[VMIN] = 0;
+    tty.c_cc[VTIME] = 0;
+    cfsetispeed(&tty, B115200);
+    cfsetospeed(&tty, B115200);
+    tcsetattr(fd, TCSANOW, &tty);
+
+    return fd;
+}
+
+
+void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
+    static int frame = 0;
+    static int totalBytesSent = 0;
+    int bytesWritten = 0;
+
+    // Issue color data to LEDs.  Each OS is fussy in different
+    // ways about serial output.  This arrangement of drain-and-
+    // write-loop seems to be the most relable across platforms:
+    tcdrain(fd);
+    for(int bytesSent = 0, bytesToGo = bufLen; bytesToGo > 0;) {
+        // If triple verbose, print out the contents of buffer in pretty columns
+        if(verbose >= TPL_VERBOSE) {
+            printf("%s: Sending bytes:\n", prog);
+            printf("Magic Word: %c%c%c (%d %d %d)\n", *buffer, *(buffer+1), *(buffer+2), *buffer, *(buffer+1), *(buffer+2));
+            for(unsigned int i=3; i<bufLen; i++) {
+                if(i%3 == 0) printf("LED %d:\t", i/3 - 1);
+                printf("%d\t|\t", buffer[i]);
+                if((i-2)%3 == 0) printf("\n");
+            }
+            printf("\n\n");
+        }
+
+        if((bytesWritten = write(fd, &buffer[bytesSent], bytesToGo)) > 0) {
+            bytesToGo -= bytesWritten;
+            bytesSent += bytesWritten;
+        }
+    }
+
+    // Keep track of byte and frame counts for statistics
+    totalBytesSent += sizeof(buffer);
+    frame++;
+
+    // Update statistics once per second
+    if(verbose >= VERBOSE && (curTime = time(NULL)) != prevTime) {
+        printf("Average frames/sec: %d, bytes/sec: %d\n", (int)((float)frame / (float)(curTime - startTime)), (int)((float)totalBytesSent / (float)(curTime - startTime)));
+        prevTime = curTime;
+    }
 }
 
 
@@ -222,5 +246,5 @@ void printUsage(void) {
 
 
 void printVersion(void) {
-	printf("TODO\n");
+	printf("%s: Version %s\n", prog, VERSION_STRING);
 }
