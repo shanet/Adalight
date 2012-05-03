@@ -129,7 +129,7 @@ int main(int argc, char *argv[]) {
             buffer[i++] = (b * brightness) / 255;
 
             // Each pixel is offset in both hue and brightness
-            sine2 += 0.3;
+            sine2 += 0.7;
         }
 
         // Slowly rotate hue and brightness in opposite directions
