@@ -2,7 +2,7 @@ CC = gcc
 LANG = c
 
 NAME = colorswirl
-VERSION = 1.0.0
+VERSION = "\"1.0.0\""
 
 BINARY = $(NAME)
 SRC = colorswirl.c

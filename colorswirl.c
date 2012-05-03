@@ -17,10 +17,8 @@ the serial port device name, e.g.:
 #include "colorswirl.h"
 
 int main(int argc, char *argv[]) {
-    int hue1;
-    int hue2;
+    int hue;
     int brightness;
-    unsigned char lo;
     unsigned char r;
     unsigned char g;
     unsigned char b;
@@ -38,17 +36,34 @@ int main(int argc, char *argv[]) {
 
     prog = argv[0];
     startTime = prevTime = time(NULL);
+    color = MULTI;
 
     // Valid long options
     static struct option longOpts[] = {
+        {"color", required_argument, NULL, 'c'},
         {"verbose", no_argument, NULL, 'v'},
         {"version", no_argument, NULL, 'V'},
         {"help", no_argument, NULL, 'h'}
     };
 
     // Parse the command line args
-    while((c = getopt_long(argc, argv, "hvVp:", longOpts, &optIndex)) != -1) {
+    while((c = getopt_long(argc, argv, "c:hvVp:", longOpts, &optIndex)) != -1) {
         switch (c) {
+            // Color
+            case 'c':
+                if(strcmp(optarg, "multi") == 0) color = MULTI;
+                else if(strcmp(optarg, "red") == 0) color = RED;
+                else if(strcmp(optarg, "orange") == 0) color = ORANGE;
+                else if(strcmp(optarg, "yellow") == 0) color = YELLOW;
+                else if(strcmp(optarg, "green") == 0) color = GREEN;
+                else if(strcmp(optarg, "blue") == 0) color = BLUE;
+                else if(strcmp(optarg, "purple") == 0) color = PURPLE;
+                else if(strcmp(optarg, "white") == 0) color = WHITE;
+                else {
+                    printUsage();
+                    return ABNORMAL_EXIT;
+                }
+                break;
             // Print help
             case 'h':
                 printUsage();
@@ -57,13 +72,13 @@ int main(int argc, char *argv[]) {
             case 'V':
                 printVersion();
                 return NORMAL_EXIT;
-            // Set verbose level
+            // Set verbosity level
             case 'v':
                 verbose++;
                 break;
             case '?':
-                fprintf(stderr, "%s: Try \"%s -h\" for usage information.\n", prog, prog);
             default:
+                fprintf(stderr, "%s: Try \"%s -h\" for usage information.\n", prog, prog);
                 return ABNORMAL_EXIT;
         }
     }
@@ -94,58 +109,15 @@ int main(int argc, char *argv[]) {
     buffer[5] = buffer[3] ^ buffer[4] ^ 0x55;   // Checksum
 
     sine1 = 0.0;
-    hue1 = 0;
+    hue = 0;
 
     while(1) {
         sine2 = sine1;
-        hue2 = hue1;
+        cur_hue = hue;
 
         // Start at position 6, after the LED header/magic word
         for(unsigned int i=6; i<sizeof(buffer);) {
-            // Fixed-point hue-to-RGB conversion.  'hue2' is an
-            // integer in the range of 0 to 1535, where 0 = red,
-            // 256 = yellow, 512 = green, etc.  The high byte
-            // (0-5) corresponds to the sextant within the color
-            // wheel, while the low byte (0-255) is the
-            // fractional part between primary/secondary colors.
-            lo = hue2 & 255;
-
-            //r = 0;
-            //g = 255;
-            //b = 0;
-
-            switch ((hue2 >> 8) % 6) {
-                case 0:
-                    r = 255;
-                    g = lo;
-                    b = 0;
-                    break;
-                case 1:
-                    r = 255 - lo;
-                    g = 255;
-                    b = 0;
-                    break;
-                case 2:
-                    r = 0;
-                    g = 255;
-                    b = lo;
-                    break;
-                case 3:
-                    r = 0;
-                    g = 255 - lo;
-                    b = 255;
-                    break;
-                case 4:
-                    r = lo;
-                    g = 0;
-                    b = 255;
-                    break;
-                case 5:
-                    r = 255;
-                    g = 0;
-                    b = 255 - lo;
-                    break;
-            }
+            getColor(&r, &g, &b);
 
             // Resulting hue is multiplied by brightness in the
             // range of 0 to 255 (0 = off, 255 = brightest).
@@ -157,12 +129,11 @@ int main(int argc, char *argv[]) {
             buffer[i++] = (b * brightness) / 255;
 
             // Each pixel is offset in both hue and brightness
-            hue2 += 40;
             sine2 += 0.3;
         }
 
         // Slowly rotate hue and brightness in opposite directions
-        hue1 = (hue1 + 5) % 1536;
+        hue = (hue + 5) % 1536;
         sine1 -= .03;
 
         // Send the data to the buffer
@@ -200,6 +171,100 @@ int openTTY(char *device) {
 }
 
 
+void getColor(unsigned char *r, unsigned char *g, unsigned char *b) {
+    static unsigned char _r;
+    static unsigned char _g;
+    static unsigned char _b;
+    static unsigned char lo;
+
+    switch(color) {
+        case MULTI:
+            // Fixed-point hue-to-RGB conversion.  'hue2' is an
+            // integer in the range of 0 to 1535, where 0 = red,
+            // 256 = yellow, 512 = green, etc.  The high byte
+            // (0-5) corresponds to the sextant within the color
+            // wheel, while the low byte (0-255) is the
+            // fractional part between primary/secondary colors.
+            lo = cur_hue & 255;
+
+            switch((cur_hue >> 8) % 6) {
+                case 0:
+                    _r = 255;
+                    _g = lo;
+                    _b = 0;
+                    break;
+                case 1:
+                    _r = 255 - lo;
+                    _g = 255;
+                    _b = 0;
+                    break;
+                case 2:
+                    _r = 0;
+                    _g = 255;
+                    _b = lo;
+                    break;
+                case 3:
+                    _r = 0;
+                    _g = 255 - lo;
+                    _b = 255;
+                    break;
+                case 4:
+                    _r = lo;
+                    _g = 0;
+                    _b = 255;
+                    break;
+                case 5:
+                    _r = 255;
+                    _g = 0;
+                    _b = 255 - lo;
+                    break;
+            }
+
+            cur_hue += 40;
+            break;
+        case RED:
+            _r = 255;
+            _g = 0;
+            _b = 0;
+            break;
+        case ORANGE:
+            _r = 255;
+            _g = 165;
+            _b = 0;
+            break;
+        case YELLOW:
+            _r = 255;
+            _g = 255;
+            _b = 0;
+            break;
+        case GREEN:
+            _r = 0;
+            _g = 255;
+            _b = 0;
+            break;
+        case BLUE:
+            _r = 0;
+            _g = 0;
+            _b = 255;
+            break;
+        case PURPLE:
+            _r = 128;
+            _g = 0;
+            _b = 128;
+            break;
+        case WHITE:
+        default:
+            _r = 255;
+            _g = 255;
+            _b = 255;
+    }
+
+    *r = _r;
+    *g = _g;
+    *b = _b;
+}
+
+
 void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
     static int frame = 0;
     static int totalBytesSent = 0;
@@ -214,7 +279,8 @@ void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
         if(verbose >= TPL_VERBOSE) {
             printf("%s: Sending bytes:\n", prog);
             printf("Magic Word: %c%c%c (%d %d %d)\n", *buffer, *(buffer+1), *(buffer+2), *buffer, *(buffer+1), *(buffer+2));
-            for(unsigned int i=3; i<bufLen; i++) {
+            printf("LED count high/low byte: %d,%d\nChecksum: %d\n", *(buffer+3), *(buffer+4), *(buffer+5));
+            for(unsigned int i=6; i<bufLen; i++) {
                 if(i%3 == 0) printf("LED %d:\t", i/3 - 1);
                 printf("%d\t|\t", buffer[i]);
                 if((i-2)%3 == 0) printf("\n");
@@ -246,5 +312,5 @@ void printUsage(void) {
 
 
 void printVersion(void) {
-	printf("%s: Version %s\n", prog, VERSION_STRING);
+	printf("%s: Version %s\n", prog, VERSION);
 }
