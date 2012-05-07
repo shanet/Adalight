@@ -23,6 +23,7 @@ int main(int argc, char *argv[]) {
     unsigned char g;
     unsigned char b;
     
+    double sine1;
     double sine2;
     
     int fd;                // File descriptor of the open device
@@ -36,20 +37,17 @@ int main(int argc, char *argv[]) {
     prog = argv[0];
     startTime = prevTime = time(NULL);
     color = MULTI;
-    rotationSpeed = ROT_NORMAL;
-    rotationSpeed = 0.0;
 
     // Valid long options
     static struct option longOpts[] = {
         {"color", required_argument, NULL, 'c'},
-        {"rotation", required_argument, NULL, 'r'},
         {"verbose", no_argument, NULL, 'v'},
         {"version", no_argument, NULL, 'V'},
         {"help", no_argument, NULL, 'h'}
     };
 
     // Parse the command line args
-    while((c = getopt_long(argc, argv, "c:r:hvVp:", longOpts, &optIndex)) != -1) {
+    while((c = getopt_long(argc, argv, "c:hvVp:", longOpts, &optIndex)) != -1) {
         switch (c) {
             // Color
             case 'c':
@@ -61,19 +59,6 @@ int main(int argc, char *argv[]) {
                 else if(strcmp(optarg, "blue") == 0) color = BLUE;
                 else if(strcmp(optarg, "purple") == 0) color = PURPLE;
                 else if(strcmp(optarg, "white") == 0) color = WHITE;
-                else {
-                    printUsage();
-                    return ABNORMAL_EXIT;
-                }
-                break;
-            // Rotation speed
-            case 'r':
-                if(strcmp(optarg, "none") == 0 || strcmp(optarg, "n") == 0) rotationSpeed = ROT_NONE;
-                else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) rotationSpeed = ROT_VERY_SLOW;
-                else if(strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
-                else if(strcmp(optarg, "normal") == 0) rotationSpeed = ROT_NORMAL;
-                else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
-                else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
                 else {
                     printUsage();
                     return ABNORMAL_EXIT;
@@ -123,11 +108,12 @@ int main(int argc, char *argv[]) {
     buffer[4] = (N_LEDS - 1) & 0xff;            // LED count low byte
     buffer[5] = buffer[3] ^ buffer[4] ^ 0x55;   // Checksum
 
+    sine1 = 0.0;
     hue = 0;
 
     while(1) {
-        sine2 = curRotationSpeed;
-        curHue = hue;
+        sine2 = sine1;
+        cur_hue = hue;
 
         // Start at position 6, after the LED header/magic word
         for(unsigned int i=6; i<sizeof(buffer);) {
@@ -143,12 +129,12 @@ int main(int argc, char *argv[]) {
             buffer[i++] = (b * brightness) / 255;
 
             // Each pixel is offset in both hue and brightness
-            sine2 += 0.3;
+            sine2 += 0.7;
         }
 
         // Slowly rotate hue and brightness in opposite directions
         hue = (hue + 5) % 1536;
-        updateRotationSpeed();
+        sine1 -= .03;
 
         // Send the data to the buffer
         sendBuffer(buffer, sizeof(buffer), fd);
@@ -199,9 +185,9 @@ void getColor(unsigned char *r, unsigned char *g, unsigned char *b) {
             // (0-5) corresponds to the sextant within the color
             // wheel, while the low byte (0-255) is the
             // fractional part between primary/secondary colors.
-            lo = curHue & 255;
+            lo = cur_hue & 255;
 
-            switch((curHue >> 8) % 6) {
+            switch((cur_hue >> 8) % 6) {
                 case 0:
                     _r = 255;
                     _g = lo;
@@ -234,7 +220,7 @@ void getColor(unsigned char *r, unsigned char *g, unsigned char *b) {
                     break;
             }
 
-            curHue += 40;
+            cur_hue += 40;
             break;
         case RED:
             _r = 255;
@@ -278,30 +264,6 @@ void getColor(unsigned char *r, unsigned char *g, unsigned char *b) {
     *b = _b;
 }
 
-
-void updateRotationSpeed(void) {
-    switch(rotationSpeed) {
-        case ROT_NONE:
-            curRotationSpeed = 0;
-            break;
-        case ROT_VERY_SLOW:
-            curRotationSpeed -= .007;
-            break;
-        case ROT_SLOW:
-            curRotationSpeed -= .015;
-            break;
-        case ROT_NORMAL:
-        default:
-            curRotationSpeed -= .03;
-            break;
-        case ROT_FAST:
-            curRotationSpeed -= .045;
-            break;
-        case ROT_VERY_FAST:
-            curRotationSpeed -= .07;
-            break;
-    }
-}
 
 void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
     static int frame = 0;
