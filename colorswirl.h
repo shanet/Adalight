@@ -31,11 +31,20 @@
 #define PURPLE 6
 #define WHITE  7
 
+#define ROT_NONE      0
+#define ROT_VERY_SLOW 1
+#define ROT_SLOW      2
+#define ROT_NORMAL    3
+#define ROT_FAST      4
+#define ROT_VERY_FAST 5
+
 
 char *prog;              // Name of the program
 int verbose;             // Verbosity level
-static int cur_hue;
+static int curHue;
 static int color;
+static int rotationSpeed;
+static double curRotationSpeed;
 static time_t curTime;
 static time_t startTime;
 static time_t prevTime;
@@ -43,6 +52,7 @@ static time_t prevTime;
 
 int openTTY(char *device);
 void getColor(unsigned char *r, unsigned char *g, unsigned char *b);
+void updateRotationSpeed(void);
 void sendBuffer(unsigned char *buffer, size_t bufLen, int fd);
 void printUsage(void);
 void printVersion(void);
