@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
     unsigned char g;
     unsigned char b;
     
-    double sine2;
+    double wavelength;
     
     int fd;                // File descriptor of the open device
     char *device;          // The device to send LED info to
@@ -36,6 +36,7 @@ int main(int argc, char *argv[]) {
     prog = argv[0];
     startTime = prevTime = time(NULL);
     color = MULTI;
+    curHue = 0;
     rotationSpeed = ROT_NORMAL;
     rotationSpeed = 0.0;
 
@@ -126,7 +127,7 @@ int main(int argc, char *argv[]) {
     hue = 0;
 
     while(1) {
-        sine2 = curRotationSpeed;
+        wavelength = curRotationSpeed;
         curHue = hue;
 
         // Start at position 6, after the LED header/magic word
@@ -137,13 +138,13 @@ int main(int argc, char *argv[]) {
             // range of 0 to 255 (0 = off, 255 = brightest).
             // Gamma corrrection (the 'pow' function here) adjusts
             // the brightness to be more perceptually linear.
-            brightness = (int)(pow(0.5 + sin(sine2) * 0.5, 3.0) * 255.0);
+            brightness = (int)(pow(0.5 + sin(wavelength) * 0.5, 3.0) * 255.0);
             buffer[i++] = (r * brightness) / 255;
             buffer[i++] = (g * brightness) / 255;
             buffer[i++] = (b * brightness) / 255;
 
             // Each pixel is offset in both hue and brightness
-            sine2 += 0.3;
+            wavelength += 0.3;
         }
 
         // Slowly rotate hue and brightness in opposite directions
@@ -302,6 +303,7 @@ void updateRotationSpeed(void) {
             break;
     }
 }
+
 
 void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
     static int frame = 0;
