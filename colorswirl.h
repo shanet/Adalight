@@ -12,7 +12,7 @@
 #include <getopt.h>
 
 
-#define N_LEDS 25 // Max of 65536
+#define NUM_LEDS 25 // Max of 65536
 
 #define NORMAL_EXIT   0
 #define ABNORMAL_EXIT 1
@@ -53,6 +53,7 @@ static time_t prevTime;
 int openTTY(char *device);
 void getColor(unsigned char *r, unsigned char *g, unsigned char *b);
 void updateRotationSpeed(void);
+void updateHue(void);
 void sendBuffer(unsigned char *buffer, size_t bufLen, int fd);
 void printUsage(void);
 void printVersion(void);

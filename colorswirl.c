@@ -17,27 +17,25 @@ the serial port device name, e.g.:
 #include "colorswirl.h"
 
 int main(int argc, char *argv[]) {
-    int hue;
     int brightness;
+    double wavelength;
     unsigned char r;
     unsigned char g;
     unsigned char b;
-    
-    double sine2;
-    
+        
     int fd;                // File descriptor of the open device
     char *device;          // The device to send LED info to
 
     char c;                // Char for processing command line args
     int optIndex;          // Index of long opts for processing command line args
 
-    unsigned char buffer[6 + (N_LEDS * 3)]; // Header + 3 bytes per LED
+    unsigned char buffer[6 + (NUM_LEDS * 3)]; // Header + 3 bytes per LED
 
     prog = argv[0];
     startTime = prevTime = time(NULL);
     color = MULTI;
+    curHue = 0;
     rotationSpeed = ROT_NORMAL;
-    rotationSpeed = 0.0;
 
     // Valid long options
     static struct option longOpts[] = {
@@ -119,35 +117,33 @@ int main(int argc, char *argv[]) {
     buffer[0] = 'A';                            // Magic word
     buffer[1] = 'd';
     buffer[2] = 'a';
-    buffer[3] = (N_LEDS - 1) >> 8;              // LED count high byte
-    buffer[4] = (N_LEDS - 1) & 0xff;            // LED count low byte
+    buffer[3] = (NUM_LEDS - 1) >> 8;              // LED count high byte
+    buffer[4] = (NUM_LEDS - 1) & 0xff;            // LED count low byte
     buffer[5] = buffer[3] ^ buffer[4] ^ 0x55;   // Checksum
 
-    hue = 0;
-
     while(1) {
-        sine2 = curRotationSpeed;
-        curHue = hue;
+        wavelength = curRotationSpeed;
 
         // Start at position 6, after the LED header/magic word
-        for(unsigned int i=6; i<sizeof(buffer);) {
+        unsigned int i = 6;
+        while(i < sizeof(buffer)) {
             getColor(&r, &g, &b);
 
             // Resulting hue is multiplied by brightness in the
             // range of 0 to 255 (0 = off, 255 = brightest).
             // Gamma corrrection (the 'pow' function here) adjusts
             // the brightness to be more perceptually linear.
-            brightness = (int)(pow(0.5 + sin(sine2) * 0.5, 3.0) * 255.0);
+            brightness = (int)(pow(0.5 + sin(wavelength) * 0.5, 3.0) * 255.0);
             buffer[i++] = (r * brightness) / 255;
             buffer[i++] = (g * brightness) / 255;
             buffer[i++] = (b * brightness) / 255;
 
             // Each pixel is offset in both hue and brightness
-            sine2 += 0.3;
+            wavelength += 0.3;
         }
 
         // Slowly rotate hue and brightness in opposite directions
-        hue = (hue + 5) % 1536;
+        updateHue();
         updateRotationSpeed();
 
         // Send the data to the buffer
@@ -301,6 +297,12 @@ void updateRotationSpeed(void) {
             curRotationSpeed -= .07;
             break;
     }
+}
+
+
+void updateHue(void) {
+    static int hue = 0;
+    curHue = hue = (hue + 5) % 1536;
 }
 
 void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
