@@ -1,1 +1,1 @@
-This project has yet to be started, but when complete will be an enhanced version of the colorswirl demo from the parent repo.
+This is a fork of the Colorswirl demo for the Adalight project. It is currently still under development, but has been extended to support many more options than the original Colorswirl program.
