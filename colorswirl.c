@@ -19,7 +19,7 @@ the serial port device name, e.g.:
 int main(int argc, char *argv[]) {
     int brightness;
     double shadowPosition;
-    double curRotationSpeed;
+    double curLightPosition;
     int curHue = 0;
     unsigned char r;
     unsigned char g;
@@ -37,12 +37,14 @@ int main(int argc, char *argv[]) {
     startTime = prevTime = time(NULL);
     color = MULTI;
     rotationSpeed = ROT_NORMAL;
+    rotationDir = ROT_CW;
     shadowLength = SDW_NORMAL;
 
     // Valid long options
     static struct option longOpts[] = {
         {"color", required_argument, NULL, 'c'},
         {"rotation", required_argument, NULL, 'r'},
+        {"direction", required_argument, NULL, 'd'},
         {"shadow", required_argument, NULL, 's'},
         {"fade", optional_argument, NULL, 'f'},
         {"verbose", no_argument, NULL, 'v'},
@@ -51,7 +53,7 @@ int main(int argc, char *argv[]) {
     };
 
     // Parse the command line args
-    while((c = getopt_long(argc, argv, "c:r:s:f::hvVp:", longOpts, &optIndex)) != -1) {
+    while((c = getopt_long(argc, argv, "c:r:d:s:f::hvVp:", longOpts, &optIndex)) != -1) {
         switch (c) {
             // Color
             case 'c':
@@ -76,6 +78,15 @@ int main(int argc, char *argv[]) {
                 else if(strcmp(optarg, "normal") == 0) rotationSpeed = ROT_NORMAL;
                 else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
                 else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
+                else {
+                    printUsage();
+                    return ABNORMAL_EXIT;
+                }
+                break;
+            // Rotation direction
+            case 'd':
+                if(strcmp(optarg, "cw") == 0) rotationDir = ROT_CW;
+                else if(strcmp(optarg, "ccw") == 0) rotationDir = ROT_CCW;
                 else {
                     printUsage();
                     return ABNORMAL_EXIT;
@@ -152,7 +163,7 @@ int main(int argc, char *argv[]) {
     buffer[5] = buffer[3] ^ buffer[4] ^ 0x55;   // Checksum
 
     while(1) {
-        shadowPosition = curRotationSpeed;
+        shadowPosition = curLightPosition;
 
         // Start at position 6, after the LED header/magic word
         unsigned int i = 6;
@@ -175,7 +186,7 @@ int main(int argc, char *argv[]) {
 
         // Slowly rotate hue and brightness in opposite directions
         updateHue(&curHue);
-        updateRotationSpeed(&curRotationSpeed);
+        updateLightPosition(&curLightPosition);
 
         // Send the data to the buffer
         sendBuffer(buffer, sizeof(buffer), fd);
@@ -306,26 +317,26 @@ void updateColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHu
 }
 
 
-void updateRotationSpeed(double *curRotationSpeed) {
+void updateLightPosition(double *lightPosition) {
     switch(rotationSpeed) {
         case ROT_NONE:
-            *curRotationSpeed = 0;
+            *lightPosition = 0;
             break;
         case ROT_VERY_SLOW:
-            *curRotationSpeed -= .007;
+            *lightPosition += (rotationDir == ROT_CW) ? -.007 : .007;
             break;
         case ROT_SLOW:
-            *curRotationSpeed -= .015;
+            *lightPosition += (rotationDir == ROT_CW) ? -.015 : .015;
             break;
         case ROT_NORMAL:
         default:
-            *curRotationSpeed -= .03;
+            *lightPosition += (rotationDir == ROT_CW) ? -.03 : .03;
             break;
         case ROT_FAST:
-            *curRotationSpeed -= .045;
+            *lightPosition += (rotationDir == ROT_CW) ? -.045 : .045;
             break;
         case ROT_VERY_FAST:
-            *curRotationSpeed -= .07;
+            *lightPosition += (rotationDir == ROT_CW) ? -.07 : .07;
             break;
     }
 }
