@@ -38,22 +38,29 @@
 #define ROT_FAST      4
 #define ROT_VERY_FAST 5
 
+#define SDW_NONE       0
+#define SDW_VERY_SMALL 1
+#define SDW_SMALL      2
+#define SDW_NORMAL     3
+#define SDW_LONG       4
+#define SDW_VERY_LONG  5
+
 
 char *prog;              // Name of the program
 int verbose;             // Verbosity level
-static int curHue;
 static int color;
 static int rotationSpeed;
-static double curRotationSpeed;
+static int shadowLength;
 static time_t curTime;
 static time_t startTime;
 static time_t prevTime;
 
 
 int openTTY(char *device);
-void getColor(unsigned char *r, unsigned char *g, unsigned char *b);
-void updateRotationSpeed(void);
-void updateHue(void);
+void updateColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHue);
+void updateRotationSpeed(double *rotationSpeed);
+void updateShadowPosition(double *shadowPosition);
+void updateHue(int *curHue);
 void sendBuffer(unsigned char *buffer, size_t bufLen, int fd);
 void printUsage(void);
 void printVersion(void);

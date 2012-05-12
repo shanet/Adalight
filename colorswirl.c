@@ -18,7 +18,9 @@ the serial port device name, e.g.:
 
 int main(int argc, char *argv[]) {
     int brightness;
-    double wavelength;
+    double shadowPosition;
+    double curRotationSpeed;
+    int curHue = 0;
     unsigned char r;
     unsigned char g;
     unsigned char b;
@@ -34,20 +36,22 @@ int main(int argc, char *argv[]) {
     prog = argv[0];
     startTime = prevTime = time(NULL);
     color = MULTI;
-    curHue = 0;
     rotationSpeed = ROT_NORMAL;
+    shadowLength = SDW_NORMAL;
 
     // Valid long options
     static struct option longOpts[] = {
         {"color", required_argument, NULL, 'c'},
         {"rotation", required_argument, NULL, 'r'},
+        {"shadow", required_argument, NULL, 's'},
+        {"fade", optional_argument, NULL, 'f'},
         {"verbose", no_argument, NULL, 'v'},
         {"version", no_argument, NULL, 'V'},
         {"help", no_argument, NULL, 'h'}
     };
 
     // Parse the command line args
-    while((c = getopt_long(argc, argv, "c:r:hvVp:", longOpts, &optIndex)) != -1) {
+    while((c = getopt_long(argc, argv, "c:r:s:f::hvVp:", longOpts, &optIndex)) != -1) {
         switch (c) {
             // Color
             case 'c':
@@ -76,6 +80,32 @@ int main(int argc, char *argv[]) {
                     printUsage();
                     return ABNORMAL_EXIT;
                 }
+                break;
+            // Shadow length
+            case 's':
+                if(strcmp(optarg, "none") == 0 || strcmp(optarg, "n") == 0) shadowLength = SDW_NONE;
+                else if(strcmp(optarg, "very_small") == 0 || strcmp(optarg, "vs") == 0) shadowLength = SDW_VERY_SMALL;
+                else if(strcmp(optarg, "small") == 0 || strcmp(optarg, "s") == 0) shadowLength = SDW_SMALL;
+                else if(strcmp(optarg, "normal") == 0) shadowLength = SDW_NORMAL;
+                else if(strcmp(optarg, "long") == 0 || strcmp(optarg, "l") == 0) shadowLength = SDW_LONG;
+                else if(strcmp(optarg, "very_long") == 0 || strcmp(optarg, "vl") == 0) shadowLength = SDW_VERY_LONG;
+                else {
+                    printUsage();
+                    return ABNORMAL_EXIT;
+                }
+                break;
+            // Fade
+            case 'f':
+                if(optarg == NULL || strcmp(optarg, "normal") == 0) rotationSpeed = ROT_NORMAL;
+                else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) rotationSpeed = ROT_VERY_SLOW;
+                else if(strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
+                else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
+                else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
+                else {
+                    printUsage();
+                    return ABNORMAL_EXIT;
+                }
+                shadowLength = SDW_NONE;
                 break;
             // Print help
             case 'h':
@@ -117,34 +147,35 @@ int main(int argc, char *argv[]) {
     buffer[0] = 'A';                            // Magic word
     buffer[1] = 'd';
     buffer[2] = 'a';
-    buffer[3] = (NUM_LEDS - 1) >> 8;              // LED count high byte
-    buffer[4] = (NUM_LEDS - 1) & 0xff;            // LED count low byte
+    buffer[3] = (NUM_LEDS - 1) >> 8;            // LED count high byte
+    buffer[4] = (NUM_LEDS - 1) & 0xff;          // LED count low byte
     buffer[5] = buffer[3] ^ buffer[4] ^ 0x55;   // Checksum
 
     while(1) {
-        wavelength = curRotationSpeed;
+        shadowPosition = curRotationSpeed;
 
         // Start at position 6, after the LED header/magic word
         unsigned int i = 6;
         while(i < sizeof(buffer)) {
-            getColor(&r, &g, &b);
+            updateColor(&r, &g, &b, curHue);
 
             // Resulting hue is multiplied by brightness in the
             // range of 0 to 255 (0 = off, 255 = brightest).
             // Gamma corrrection (the 'pow' function here) adjusts
             // the brightness to be more perceptually linear.
-            brightness = (int)(pow(0.5 + sin(wavelength) * 0.5, 3.0) * 255.0);
+            brightness = (shadowLength != SDW_NONE || rotationSpeed != ROT_NONE) ? (int)(pow(0.5 + sin(shadowPosition) * 0.5, 3.0) * 255.0) : 255;
+
             buffer[i++] = (r * brightness) / 255;
             buffer[i++] = (g * brightness) / 255;
             buffer[i++] = (b * brightness) / 255;
 
             // Each pixel is offset in both hue and brightness
-            wavelength += 0.3;
+            updateShadowPosition(&shadowPosition);
         }
 
         // Slowly rotate hue and brightness in opposite directions
-        updateHue();
-        updateRotationSpeed();
+        updateHue(&curHue);
+        updateRotationSpeed(&curRotationSpeed);
 
         // Send the data to the buffer
         sendBuffer(buffer, sizeof(buffer), fd);
@@ -181,7 +212,7 @@ int openTTY(char *device) {
 }
 
 
-void getColor(unsigned char *r, unsigned char *g, unsigned char *b) {
+void updateColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHue) {
     static unsigned char _r;
     static unsigned char _g;
     static unsigned char _b;
@@ -275,34 +306,59 @@ void getColor(unsigned char *r, unsigned char *g, unsigned char *b) {
 }
 
 
-void updateRotationSpeed(void) {
+void updateRotationSpeed(double *curRotationSpeed) {
     switch(rotationSpeed) {
         case ROT_NONE:
-            curRotationSpeed = 0;
+            *curRotationSpeed = 0;
             break;
         case ROT_VERY_SLOW:
-            curRotationSpeed -= .007;
+            *curRotationSpeed -= .007;
             break;
         case ROT_SLOW:
-            curRotationSpeed -= .015;
+            *curRotationSpeed -= .015;
             break;
         case ROT_NORMAL:
         default:
-            curRotationSpeed -= .03;
+            *curRotationSpeed -= .03;
             break;
         case ROT_FAST:
-            curRotationSpeed -= .045;
+            *curRotationSpeed -= .045;
             break;
         case ROT_VERY_FAST:
-            curRotationSpeed -= .07;
+            *curRotationSpeed -= .07;
             break;
     }
 }
 
 
-void updateHue(void) {
+void updateShadowPosition(double *shadowPosition) {
+    switch(shadowLength) {
+        case SDW_NONE:
+            *shadowPosition += 0;
+            break;
+        case SDW_VERY_SMALL:
+            *shadowPosition += 0.9;
+            break;
+        case SDW_SMALL:
+            *shadowPosition += 0.6;
+            break;
+        case SDW_NORMAL:
+        default:
+            *shadowPosition += 0.3;
+            break;
+        case SDW_LONG:
+            *shadowPosition += 0.2;
+            break;
+        case SDW_VERY_LONG:
+            *shadowPosition += 0.08;
+            break;
+    }
+}
+
+
+void updateHue(int *curHue) {
     static int hue = 0;
-    curHue = hue = (hue + 5) % 1536;
+    *curHue = hue = (hue + 5) % 1536;
 }
 
 void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
