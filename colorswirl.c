@@ -388,8 +388,8 @@ void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
             printf("Magic Word: %c%c%c (%d %d %d)\n", *buffer, *(buffer+1), *(buffer+2), *buffer, *(buffer+1), *(buffer+2));
             printf("LED count high/low byte: %d,%d\nChecksum: %d\n", *(buffer+3), *(buffer+4), *(buffer+5));
             for(unsigned int i=6; i<bufLen; i++) {
-                if(i%3 == 0) printf("LED %d:\t", i/3 - 1);
-                printf("%d\t|\t", buffer[i]);
+                if(i%3 == 0) printf("LED %2d:   ", i/3 - 1);
+                printf("%3d   |   ", buffer[i]);
                 if((i-2)%3 == 0) printf("\n");
             }
             printf("\n\n");
