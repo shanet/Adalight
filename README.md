@@ -1,4 +1,6 @@
-This is a fork of the Colorswirl demo for the Adalight project. It is currently still under development, but has been extended to support many more options than the original Colorswirl program.
+This is a fork of the Colorswirl demo for the Adalight project which has been extended to support many more options than the original Colorswirl program. It was created due to the screen sampling program described in the link below is too slow to use on Linux. Thus, it due to the use of GNU functions (namely getopt), it will only compile and run under Linux.
+
+To use it you'll need to follow the instructions at http://ladyada.net/make/adalight/.
 
     Usage: colorswirl [options] [device]
 
