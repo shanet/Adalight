@@ -393,11 +393,23 @@ void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
             printf("Magic Word: %c%c%c (%d %d %d)\n", *buffer, *(buffer+1), *(buffer+2), *buffer, *(buffer+1), *(buffer+2));
             printf("LED count high/low byte: %d,%d\n", *(buffer+3), *(buffer+4));
             printf("Checksum: %d\n", *(buffer+5));
-            printf("          RED   |  GREEN  |   BLUE\n");
+            printf("          RED   |  GREEN  |  BLUE\n");
+            
             for(unsigned int i=6; i<bufLen; i++) {
-                if(i%3 == 0) printf("LED %2d:   ", i/3 - 1);
-                printf("%3d   |   ", buffer[i]);
-                if((i-2)%3 == 0) printf("\n");
+                // Print the LED number every 3 loop iterations
+                if(i%3 == 0) {
+                    printf("LED %2d:   ", i/3 - 1);
+                }
+
+                // Print the value in the buffer
+                printf("%3d   ", buffer[i]);
+
+                // Print column seperators for the first two columns and a newline for the third
+                if((i-2)%3 != 0) {
+                    printf("|   ");
+                } else {
+                    printf("\n");
+                }
             }
             printf("\n\n");
         }
