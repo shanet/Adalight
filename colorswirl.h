@@ -1,3 +1,22 @@
+/*
+
+Colorswirl
+
+Author: Shane Tully
+
+Source:      https://github.com/shanet/Adalight
+Forked from: https://github.com/adafruit/Adalight
+
+This is the host PC-side code written in C; intended for use with a 
+USB-connected Arduino microcontroller running the accompanying LED 
+streaming code.  Requires one strand of  Digital RGB LED Pixels 
+(Adafruit product ID #322, specifically the newer WS2801-based 
+type, strand of 25) and a 5 Volt power supply (such as 
+Adafruit #276).  You may need to adapt the code and  the hardware 
+arrangement for your specific configuration.
+
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

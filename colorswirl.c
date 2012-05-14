@@ -1,16 +1,19 @@
 /*
-"Colorswirl" LED demo.  This is the host PC-side code written in C;
-intended for use with a USB-connected Arduino microcontroller running the
-accompanying LED streaming code.  Requires one strand of Digital RGB LED
-Pixels (Adafruit product ID #322, specifically the newer WS2801-based type,
-strand of 25) and a 5 Volt power supply (such as Adafruit #276).  You may
-need to adapt the code and the hardware arrangement for your specific
-configuration.
 
-This is a command-line program.  It expects a single parameter, which is
-the serial port device name, e.g.:
+Colorswirl
 
-	./colorswirl /dev/tty.usbserial-A60049KO
+Author: Shane Tully
+
+Source:      https://github.com/shanet/Adalight
+Forked from: https://github.com/adafruit/Adalight
+
+This is the host PC-side code written in C; intended for use with a 
+USB-connected Arduino microcontroller running the accompanying LED 
+streaming code.  Requires one strand of  Digital RGB LED Pixels 
+(Adafruit product ID #322, specifically the newer WS2801-based 
+type, strand of 25) and a 5 Volt power supply (such as 
+Adafruit #276).  You may need to adapt the code and  the hardware 
+arrangement for your specific configuration.
 
 */
 
@@ -33,6 +36,7 @@ int main(int argc, char *argv[]) {
 
     unsigned char buffer[6 + (NUM_LEDS * 3)]; // Header + 3 bytes per LED
 
+    // Init globals
     prog = argv[0];
     startTime = prevTime = time(NULL);
     color = MULTI;
