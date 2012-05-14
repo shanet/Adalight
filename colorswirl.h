@@ -13,6 +13,7 @@
 
 
 #define NUM_LEDS 25 // Max of 65536
+#define DEFAULT_DEVICE "/dev/ttyACM0"
 
 #define NORMAL_EXIT   0
 #define ABNORMAL_EXIT 1

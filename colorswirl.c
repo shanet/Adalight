@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
     unsigned char b;
         
     int fd;                // File descriptor of the open device
-    char *device;          // The device to send LED info to
+    char *device = NULL;   // The device to send LED info to
 
     char c;                // Char for processing command line args
     int optIndex;          // Index of long opts for processing command line args
@@ -107,9 +107,9 @@ int main(int argc, char *argv[]) {
                 break;
             // Fade
             case 'f':
-                if(optarg == NULL || strcmp(optarg, "normal") == 0) rotationSpeed = ROT_NORMAL;
+                if(optarg == NULL || strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
                 else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) rotationSpeed = ROT_VERY_SLOW;
-                else if(strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
+                else if(strcmp(optarg, "normal") == 0 || strcmp(optarg, "n") == 0) rotationSpeed = ROT_NORMAL;
                 else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
                 else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
                 else {
@@ -138,12 +138,17 @@ int main(int argc, char *argv[]) {
     }
 
     // Get the device we're using
-    if(argc >= optind) {
+    if(argc == optind+1) {
     	device = argv[optind];
-	} else {
+	} else if(argc > optind) {
+        fprintf(stderr, "%s: Too many arguments specified.\n", prog);
 		printUsage();
 		return ABNORMAL_EXIT;
-	}
+	} else {
+        // If a device wasn't specified, try a common one
+        printf("%s: Device not specified. Defaulting to \"%s\".\n", prog, DEFAULT_DEVICE);
+        device = DEFAULT_DEVICE;
+    }
 
     // Open the device
     if((fd = openTTY(device)) == -1) {
