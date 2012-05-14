@@ -47,13 +47,14 @@ int main(int argc, char *argv[]) {
         {"direction", required_argument, NULL, 'd'},
         {"shadow", required_argument, NULL, 's'},
         {"fade", optional_argument, NULL, 'f'},
+        {"solid", no_argument, NULL, 'o'},
         {"verbose", no_argument, NULL, 'v'},
         {"version", no_argument, NULL, 'V'},
         {"help", no_argument, NULL, 'h'}
     };
 
     // Parse the command line args
-    while((c = getopt_long(argc, argv, "c:r:d:s:f::hvVp:", longOpts, &optIndex)) != -1) {
+    while((c = getopt_long(argc, argv, "c:r:d:s:f::ohvVp:", longOpts, &optIndex)) != -1) {
         switch (c) {
             // Color
             case 'c':
@@ -116,6 +117,11 @@ int main(int argc, char *argv[]) {
                     printUsage();
                     return ABNORMAL_EXIT;
                 }
+                shadowLength = SDW_NONE;
+                break;
+            // Solid
+            case 'o':
+                rotationSpeed = ROT_NONE;
                 shadowLength = SDW_NONE;
                 break;
             // Print help
@@ -394,7 +400,7 @@ void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
             printf("LED count high/low byte: %d,%d\n", *(buffer+3), *(buffer+4));
             printf("Checksum: %d\n", *(buffer+5));
             printf("          RED   |  GREEN  |  BLUE\n");
-            
+
             for(unsigned int i=6; i<bufLen; i++) {
                 // Print the LED number every 3 loop iterations
                 if(i%3 == 0) {
@@ -404,7 +410,7 @@ void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
                 // Print the value in the buffer
                 printf("%3d   ", buffer[i]);
 
-                // Print column seperators for the first two columns and a newline for the third
+                // Print column separators for the first two columns and a newline for the third
                 if((i-2)%3 != 0) {
                     printf("|   ");
                 } else {
@@ -433,7 +439,38 @@ void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
 
 
 void printUsage(void) {
-	printf("Usage: %s device\n", prog);
+	printf("Usage: %s [options] [device]\n", prog);
+    
+    printf("\t--color\t\t-c\t\tColor to use\n");
+    printf("\t\tSupported colors:\n\t\t  multi (default)\n\t\t  red\n\t\t  orange\n\t\t  yellow\n\t\t  green\n\t\t  blue\n\t\t  purple\n\t\t  white\n\n");
+    
+    printf("\t--rotation\t-r\t\tRotation speed\n");
+    printf("\t\tSupported rotation speeds:\n\t\t  n\tnone\n\t\t  vs\tvery_slow\n\t\t  s\tslow\n\t\t  \tnormal (default)\n\t\t  f\tfast\n\t\t  vf\tvery_fast\n\n");
+    
+    printf("\t--direction\t-d\t\tRotation direction\n");
+    printf("\t\tSupported directions:\n\t\t  cw\tClockwise (default)\n\t\t  ccw\tCounter-clockwise\n\n");
+    
+    printf("\t--shadow\t-s\t\tShadow length\n");
+    printf("\t\tSupported shadow lengths:\n\t\t  n\tnone\n\t\t  vs\tvery_small\n\t\t  s\tsmall\n\t\t  \tnormal (default)\n\t\t  l\tlong\n\t\t  vl\tvery_long\n\t\t\n\n");
+
+    printf("\t--fade\t\t-f\t\tFade speed (shorthand for no rotation, slow shadow)\n");
+    printf("\t\tThis option takes an optional argument. Arguments must be specified \n\t\tvia the form \"--fade=[speed]\" or \"-f[speed]\"\n");
+    printf("\t\tSupported fade speeds:\n\t\t  vs\tvery_slow\n\t\t  s\tslow (default)\n\t\t  n\tnormal\n\t\t  f\tfast\n\t\t  vf\tvery_fast\n\n");
+    
+    printf("\t--solid\t\t-o\t\tShorthand for no rotation, no shadow\n");
+    printf("\t\tTakes no arguments. Simply shows the selected color at full brightness\n\n");
+    
+    printf("\t--verbose\t-v\t\tIncrease verbosity. Can be specified multiple times.\n");
+    printf("\t\tSingle verbose will show \"frame rate\" and bytes/sec. Double verbose is \n\t\tcurrently the same as single verbose. Triple verbose will show all info\n\t\t\
+being sent to the device. This is useful for visualizing how the options\n\t\tabove affect what data is sent to the device.\n\n");
+
+    printf("\t--version\t-V\t\tDisplay version and exit\n");
+    printf("\t--help\t\t-h\t\tDisplay this message and exit\n\n");
+    
+    printf("\tDevice is the path to the block device to write data to. If not specified,\n\tdefaults to \"%s\"\n\n", DEFAULT_DEVICE);
+
+    printf("\tOptions are parsed from left to right. For example, specifying --solid and then\n\t--shadow will NOT result in a solid color.\
+            \n\n\tIf all this seems confusing, just play with the options and try triple verbose.\n");
 }
 
 
