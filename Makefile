@@ -16,5 +16,11 @@ all:
 debug:
 	$(CC) $(CFLAGS) -ggdb $(SRC) -o $(BINARY) $(LIBS)
 
+install:
+	cp $(BINARY) /usr/sbin/
+
+remove:
+	rm /usr/sbin/$(BINARY)
+
 clean:
 	rm -f $(BINARY) *.o
