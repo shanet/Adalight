@@ -1,6 +1,6 @@
 # Colorswirl
-### Author: Shane Tully
 ### Forked from: https://github.com/adafruit/Adalight
+#### Author: Shane Tully
 
 This is a fork of the Colorswirl demo for the Adalight project which has been extended to support many more options than the original Colorswirl program. It was created due to the screen sampling program in the original repo being too slow to use on Linux (blame Java, not the author of the program).
 
