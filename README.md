@@ -1,5 +1,5 @@
 # Colorswirl
-## Author: Shane Tully
+### Author: Shane Tully
 ### Forked from: https://github.com/adafruit/Adalight
 
 This is a fork of the Colorswirl demo for the Adalight project which has been extended to support many more options than the original Colorswirl program. It was created due to the screen sampling program in the original repo being too slow to use on Linux (blame Java, not the author of the program).
@@ -16,7 +16,7 @@ Due to the use of GNU functions, namely getopt, this will not compile on Windows
 
 ## Usage
 
-Usage is very well documented in the help text available via the --help option, but also available below.
+Usage is very well documented in the help text available via the --help option, but is also available below.
 
 The colorswirl_update program allows for dynamic changing of LED behavior while colorswirl is running. To use it simply run it with the same arguments as colorswirl and those arguments will be passed to colorswirl and updated appropriately. While you can specifiy a different device to send LED info to this way, it will have no effect. This is useful if you want colorswirl to start when you log in to your desktop and bind shortcuts to different effects without restarting the program.
 
