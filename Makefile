@@ -9,10 +9,10 @@ BINARY = $(NAME)
 UPDATE_BINARY = $(UPDATE_NAME)
 SRC = colorswirl.c
 UPDATE_SRC = colorswirl_update.c
-LIBS = -lm -lrt
+LIBS = -lm -lrt -pthread
 
-MACROS = -DVERSION=$(VERSION) -DMQ_NAME="\"/$(NAME)\"" -D_GNU_SOURCE
-CFLAGS = -std=c99 -Wall -Wextra 
+MACROS = -DVERSION=$(VERSION) -DMQ_NAME="\"/$(NAME)\"" -D_GNU_SOURCE -DMAX_MSG_LEN=128
+CFLAGS = -std=c99 -Wall -Wextra
 
 .PHONY: all colorswirl colorswirl_update
 

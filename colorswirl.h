@@ -88,8 +88,8 @@ static time_t startTime;   // Time of program start
 static time_t prevTime;    // Previous current time
 
 
-void processArgs(int argc, char **argv);
-char** getMessage(int *argc);
+int processArgs(int argc, char **argv, char **device);
+void* messageLoop(void*);
 int openTTY(char *device);
 void updateColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHue);
 void updateLightPosition(double *lightPosition);

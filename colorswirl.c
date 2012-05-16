@@ -30,9 +30,8 @@ int main(int argc, char **argv) {
         
     int fd;                   // File descriptor of the open device
     char *device = NULL;      // The device to send LED info to
+    pthread_t tid;
 
-    int _argc = 0;
-    char **_argv = NULL;
 
     unsigned char buffer[6 + (NUM_LEDS * 3)]; // Header + 3 bytes per LED
 
@@ -49,7 +48,12 @@ int main(int argc, char **argv) {
     installSigHandler(SIGTERM, sigHandler);
 
     // Process command line args
-    device = processArgs(argc, argv);
+    if(processArgs(argc, argv, &device) == -1) {
+        exit(ABNORMAL_EXIT);
+    }
+
+    // Start the message thread
+    pthread_create(&tid, NULL, messageLoop, NULL);
 
     // Open the device
     if((fd = openTTY(device)) == -1) {
@@ -101,8 +105,6 @@ int main(int argc, char **argv) {
     // Clean up
     close(fd);
     mq_unlink(MQ_NAME);
-    free(_argv);
-    _argv = NULL;
 
     return 0;
 }
@@ -338,10 +340,9 @@ void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
 }
 
 
-void processArgs(int argc, char **argv) {
+int processArgs(int argc, char **argv, char **device) {
     char c;                   // Char for processing command line args
     int optIndex;             // Index of long opts for processing command line args
-    char *device = NULL;      // The device to send LED info to
 
     // In order to call getopt() more than once, optind must be reset to 1
     optind = 1;
@@ -374,7 +375,7 @@ void processArgs(int argc, char **argv) {
                 else if(strcmp(optarg, "white") == 0) color = WHITE;
                 else {
                     printUsage();
-                    exit(ABNORMAL_EXIT);
+                    return -1;
                 }
                 break;
             // Rotation speed
@@ -387,7 +388,7 @@ void processArgs(int argc, char **argv) {
                 else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
                 else {
                     printUsage();
-                    exit(ABNORMAL_EXIT);
+                    return -1;
                 }
                 break;
             // Rotation direction
@@ -396,7 +397,7 @@ void processArgs(int argc, char **argv) {
                 else if(strcmp(optarg, "ccw") == 0) rotationDir = ROT_CCW;
                 else {
                     printUsage();
-                    exit(ABNORMAL_EXIT);
+                    return -1;
                 }
                 break;
             // Shadow length
@@ -409,7 +410,7 @@ void processArgs(int argc, char **argv) {
                 else if(strcmp(optarg, "very_long") == 0 || strcmp(optarg, "vl") == 0) shadowLength = SDW_VERY_LONG;
                 else {
                     printUsage();
-                    exit(ABNORMAL_EXIT);
+                    return -1;
                 }
                 break;
             // Fade
@@ -421,7 +422,7 @@ void processArgs(int argc, char **argv) {
                 else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
                 else {
                     printUsage();
-                    exit(ABNORMAL_EXIT);
+                    return -1;
                 }
                 shadowLength = SDW_NONE;
                 break;
@@ -444,104 +445,111 @@ void processArgs(int argc, char **argv) {
                 break;
             case '?':
             default:
-                fprintf(stderr, "%s: Use \"%s -h\" for usage information.\n", prog, prog);
-                exit(ABNORMAL_EXIT);
+                printUsage();
+                return -1;
         }
     }
 
-    // Get the device we're using
-    if(argc == optind+1) {
-        device = argv[optind];
+    // Get the device we're using (if device is NULL don't worry about it; this happens if updating from a message)
+    if(argc == optind+1 && device != NULL) {
+        *device = argv[optind];
     } else if(argc > optind) {
         fprintf(stderr, "%s: Too many arguments specified.\n", prog);
         printUsage();
-        exit(ABNORMAL_EXIT);
-    } else {
+        return -1;
+    } else if(device != NULL) {
         // If a device wasn't specified, try a common one
         printf("%s: Device not specified. Defaulting to \"%s\".\n", prog, DEFAULT_DEVICE);
-        device = DEFAULT_DEVICE;
+        *device = DEFAULT_DEVICE;
     }
+
+    return 0;
 }
 
 
-char** getMessage(int *argc) {
+void* messageLoop(void *tid) {
+    mqd_t mqd = -1;
+    int argc;
+    int msgLen = 0;
 
-            // Check for new messages
-        if((_argv = getMessage(&_argc)) != NULL) {
-            // If there was a message, pass it on the process args to update the global behavior variables
-            processArgs(_argc, _argv);
-        }
+    // Do something with tid to make GCC happy and get rid of the unused parameter warning
+    tid++;
 
-    static mqd_t mqd = -1;
-    struct mq_attr attr;
+    // Set the max message length as MAX_MSG_LEN
+    struct mq_attr attr = {
+        .mq_flags = 0,
+        .mq_maxmsg = 10,
+        .mq_msgsize = MAX_MSG_LEN,
+        .mq_curmsgs = 0
+    };
 
     // Open the message queue if it isn't already open
-    if(mqd == -1 && (mqd = mq_open(MQ_NAME, O_RDONLY | O_NONBLOCK)) == -1) {
-        // Only display an error if the error opening the queue was something other
-        // than the queue not existing
-        if(errno != ENOENT) {
-            fprintf(stderr, "Error opening queue: %s\n", strerror(errno));
-        }
-        return NULL;
+    if((mqd = mq_open(MQ_NAME, O_RDONLY | O_CREAT, 0600, &attr)) == -1) {
+        fprintf(stderr, "Error opening queue: %s. Exiting message queue thread.\n", strerror(errno));
+        pthread_exit(NULL);
     }
 
-    if(verbose >= TPL_VERBOSE) {
-        printf("%s: Connected to message queue. Checking for messages...\n", prog);
+    if(verbose >= DBL_VERBOSE) {
+        printf("%s: Connected to message queue. Waiting for messages...\n", prog);
     }
 
     while(1) {
-    // Queue attributes
-    if(mq_getattr(mqd, &attr) == -1) {
-        fprintf(stderr, "Error getting message queue attributes: %s\n", strerror(errno));
-        return NULL;
+        // Queue attributes
+        if(mq_getattr(mqd, &attr) == -1) {
+            fprintf(stderr, "Error getting message queue attributes: %s. Exiting message queue thread.\n", strerror(errno));
+            pthread_exit(NULL);
+        }
+
+        // Create the buffer for the queue message from the max message size of the queue
+        char *buf = malloc(attr.mq_msgsize);
+        if(buf == NULL) {
+            fprintf(stderr, "Failed to allocate memory for message queue buffer. Exiting message queue thread.\n");
+            pthread_exit(NULL);
+        }
+
+        // Get the first message which is the argument count
+        if((msgLen = mq_receive(mqd, buf, attr.mq_msgsize, 0)) == -1) {
+            fprintf(stderr, "Failed to recieve message in queue: %s\n", strerror(errno));
+            continue;
+        }
+        buf[msgLen] = '\0';
+
+        if(verbose >= DBL_VERBOSE) {
+            fprintf(stderr, "%s: Got message (should be number of arguments): %s\n", prog, buf);
+        }
+
+        // Convert argc message to an int
+        sscanf(buf, "%d", &argc);
+
+        // Get the arguments in a flattened string
+        if((msgLen = mq_receive(mqd, buf, attr.mq_msgsize, 0)) == -1) {
+            fprintf(stderr, "Failed to recieve message in queue: %s\n", strerror(errno));
+            continue;
+        }
+        buf[msgLen] = '\0';
+
+        if(verbose >= DBL_VERBOSE) {
+            fprintf(stderr, "%s: Got message (should be %d arguments): %s\n", prog, argc, buf);
+        }
+
+        // Tokenize the buffer back to an array
+        char **argv = malloc(attr.mq_msgsize);
+        char *arg = strtok(buf, " ");
+        int i = 0;
+        while(arg != NULL) {
+            argv[i] = arg;
+            arg = strtok(NULL, " ");
+            i++;
+        }
+
+        // Pass on the new argumentsto the process args function to update the global behavior variables
+        processArgs(argc, argv, NULL);
+
+        free(argv);
+        argv = NULL;
     }
 
-    // Create the buffer for the queue message from the max message size of the queue
-    char *buf = malloc(attr.mq_msgsize);
-    if(buf == NULL) {
-        fprintf(stderr, "Failed to allocate memory for message queue buffer.\n");
-        return NULL;
-    }
-
-    if(verbose >= DBL_VERBOSE) {
-        printf("%s: Number of messages in queue: %d\n", prog, (int)attr.mq_curmsgs);
-    }
-
-    // Check that there are at least two messages in the queue
-    if(attr.mq_curmsgs < 2) return NULL;
-
-    // Get the first message which is the argument count
-    if(mq_receive(mqd, buf, attr.mq_msgsize, 0) == -1) {
-        fprintf(stderr, "Failed to recieve message in queue: %s\n", strerror(errno));
-    }
-
-    if(verbose >= DBL_VERBOSE) {
-        fprintf(stderr, "%s: Got message: %s\n", prog, buf);
-    }
-
-    // Convert argc message to an int
-    sscanf(buf, "%d", argc);
-
-    // Get the arguments in a flattened string
-    if(mq_receive(mqd, buf, attr.mq_msgsize, 0) == -1) {
-        fprintf(stderr, "Failed to recieve message in queue: %s\n", strerror(errno));
-    }
-
-    if(verbose >= DBL_VERBOSE) {
-        fprintf(stderr, "%s: Got message: %s\n", prog, buf);
-    }
-
-    // Tokenize the buffer back to an array
-    char **argv = malloc(attr.mq_msgsize);
-    char *arg = strtok(buf, " ");
-    int i = 0;
-    while(arg != NULL) {
-        argv[i] = arg;
-        arg = strtok(NULL, " ");
-        i++;
-    }
-
-    return argv;
+    pthread_exit(NULL);
 }
 
 
