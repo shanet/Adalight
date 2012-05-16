@@ -23,6 +23,9 @@ arrangement for your specific configuration.
 #include <errno.h>
 #include <unistd.h>
 
+#include <pthread.h>
+#include <signal.h>
+#include <mqueue.h>
 #include <fcntl.h>
 #include <termios.h>
 
@@ -31,7 +34,7 @@ arrangement for your specific configuration.
 #include <getopt.h>
 
 
-#define NUM_LEDS 25 // Max of 65536
+#define NUM_LEDS       25
 #define DEFAULT_DEVICE "/dev/ttyACM0"
 
 #define NORMAL_EXIT   0
@@ -85,11 +88,15 @@ static time_t startTime;   // Time of program start
 static time_t prevTime;    // Previous current time
 
 
+void processArgs(int argc, char **argv);
+char** getMessage(int *argc);
 int openTTY(char *device);
 void updateColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHue);
 void updateLightPosition(double *lightPosition);
 void updateShadowPosition(double *shadowPosition);
 void updateHue(int *curHue);
 void sendBuffer(unsigned char *buffer, size_t bufLen, int fd);
+void sigHandler(int sig);
+int installSigHandler(int sig, sighandler_t func);
 void printUsage(void);
 void printVersion(void);

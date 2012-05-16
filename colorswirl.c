@@ -19,20 +19,20 @@ arrangement for your specific configuration.
 
 #include "colorswirl.h"
 
-int main(int argc, char *argv[]) {
-    int brightness;
-    double shadowPosition;
-    double curLightPosition;
-    int curHue = 0;
-    unsigned char r;
-    unsigned char g;
-    unsigned char b;
+int main(int argc, char **argv) {
+    int brightness;           // Current brightness
+    double shadowPosition;    // Current shadow position
+    double curLightPosition;  // Current light position (related to rotation speed)
+    int curHue = 0;           // Current hue
+    unsigned char r;          // Current red value
+    unsigned char g;          // Current green value
+    unsigned char b;          // Current blue value
         
-    int fd;                // File descriptor of the open device
-    char *device = NULL;   // The device to send LED info to
+    int fd;                   // File descriptor of the open device
+    char *device = NULL;      // The device to send LED info to
 
-    char c;                // Char for processing command line args
-    int optIndex;          // Index of long opts for processing command line args
+    int _argc = 0;
+    char **_argv = NULL;
 
     unsigned char buffer[6 + (NUM_LEDS * 3)]; // Header + 3 bytes per LED
 
@@ -44,121 +44,12 @@ int main(int argc, char *argv[]) {
     rotationDir = ROT_CW;
     shadowLength = SDW_NORMAL;
 
-    // Valid long options
-    static struct option longOpts[] = {
-        {"color", required_argument, NULL, 'c'},
-        {"rotation", required_argument, NULL, 'r'},
-        {"direction", required_argument, NULL, 'd'},
-        {"shadow", required_argument, NULL, 's'},
-        {"fade", optional_argument, NULL, 'f'},
-        {"solid", no_argument, NULL, 'o'},
-        {"verbose", no_argument, NULL, 'v'},
-        {"version", no_argument, NULL, 'V'},
-        {"help", no_argument, NULL, 'h'}
-    };
+    // Install SIGINT and SIGTERM handlers
+    installSigHandler(SIGINT, sigHandler);
+    installSigHandler(SIGTERM, sigHandler);
 
-    // Parse the command line args
-    while((c = getopt_long(argc, argv, "c:r:d:s:f::ohvVp:", longOpts, &optIndex)) != -1) {
-        switch (c) {
-            // Color
-            case 'c':
-                if(strcmp(optarg, "multi") == 0) color = MULTI;
-                else if(strcmp(optarg, "red") == 0) color = RED;
-                else if(strcmp(optarg, "orange") == 0) color = ORANGE;
-                else if(strcmp(optarg, "yellow") == 0) color = YELLOW;
-                else if(strcmp(optarg, "green") == 0) color = GREEN;
-                else if(strcmp(optarg, "blue") == 0) color = BLUE;
-                else if(strcmp(optarg, "purple") == 0) color = PURPLE;
-                else if(strcmp(optarg, "white") == 0) color = WHITE;
-                else {
-                    printUsage();
-                    return ABNORMAL_EXIT;
-                }
-                break;
-            // Rotation speed
-            case 'r':
-                if(strcmp(optarg, "none") == 0 || strcmp(optarg, "n") == 0) rotationSpeed = ROT_NONE;
-                else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) rotationSpeed = ROT_VERY_SLOW;
-                else if(strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
-                else if(strcmp(optarg, "normal") == 0) rotationSpeed = ROT_NORMAL;
-                else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
-                else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
-                else {
-                    printUsage();
-                    return ABNORMAL_EXIT;
-                }
-                break;
-            // Rotation direction
-            case 'd':
-                if(strcmp(optarg, "cw") == 0) rotationDir = ROT_CW;
-                else if(strcmp(optarg, "ccw") == 0) rotationDir = ROT_CCW;
-                else {
-                    printUsage();
-                    return ABNORMAL_EXIT;
-                }
-                break;
-            // Shadow length
-            case 's':
-                if(strcmp(optarg, "none") == 0 || strcmp(optarg, "n") == 0) shadowLength = SDW_NONE;
-                else if(strcmp(optarg, "very_small") == 0 || strcmp(optarg, "vs") == 0) shadowLength = SDW_VERY_SMALL;
-                else if(strcmp(optarg, "small") == 0 || strcmp(optarg, "s") == 0) shadowLength = SDW_SMALL;
-                else if(strcmp(optarg, "normal") == 0) shadowLength = SDW_NORMAL;
-                else if(strcmp(optarg, "long") == 0 || strcmp(optarg, "l") == 0) shadowLength = SDW_LONG;
-                else if(strcmp(optarg, "very_long") == 0 || strcmp(optarg, "vl") == 0) shadowLength = SDW_VERY_LONG;
-                else {
-                    printUsage();
-                    return ABNORMAL_EXIT;
-                }
-                break;
-            // Fade
-            case 'f':
-                if(optarg == NULL || strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
-                else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) rotationSpeed = ROT_VERY_SLOW;
-                else if(strcmp(optarg, "normal") == 0 || strcmp(optarg, "n") == 0) rotationSpeed = ROT_NORMAL;
-                else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
-                else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
-                else {
-                    printUsage();
-                    return ABNORMAL_EXIT;
-                }
-                shadowLength = SDW_NONE;
-                break;
-            // Solid
-            case 'o':
-                rotationSpeed = ROT_NONE;
-                shadowLength = SDW_NONE;
-                break;
-            // Print help
-            case 'h':
-                printUsage();
-                return NORMAL_EXIT;
-            // Print version
-            case 'V':
-                printVersion();
-                return NORMAL_EXIT;
-            // Set verbosity level
-            case 'v':
-                verbose++;
-                break;
-            case '?':
-            default:
-                fprintf(stderr, "%s: Try \"%s -h\" for usage information.\n", prog, prog);
-                return ABNORMAL_EXIT;
-        }
-    }
-
-    // Get the device we're using
-    if(argc == optind+1) {
-    	device = argv[optind];
-	} else if(argc > optind) {
-        fprintf(stderr, "%s: Too many arguments specified.\n", prog);
-		printUsage();
-		return ABNORMAL_EXIT;
-	} else {
-        // If a device wasn't specified, try a common one
-        printf("%s: Device not specified. Defaulting to \"%s\".\n", prog, DEFAULT_DEVICE);
-        device = DEFAULT_DEVICE;
-    }
+    // Process command line args
+    device = processArgs(argc, argv);
 
     // Open the device
     if((fd = openTTY(device)) == -1) {
@@ -207,7 +98,12 @@ int main(int argc, char *argv[]) {
         sendBuffer(buffer, sizeof(buffer), fd);
     }
 
+    // Clean up
     close(fd);
+    mq_unlink(MQ_NAME);
+    free(_argv);
+    _argv = NULL;
+
     return 0;
 }
 
@@ -442,6 +338,245 @@ void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
 }
 
 
+void processArgs(int argc, char **argv) {
+    char c;                   // Char for processing command line args
+    int optIndex;             // Index of long opts for processing command line args
+    char *device = NULL;      // The device to send LED info to
+
+    // In order to call getopt() more than once, optind must be reset to 1
+    optind = 1;
+
+    // Valid long options
+    static struct option longOpts[] = {
+        {"color", required_argument, NULL, 'c'},
+        {"rotation", required_argument, NULL, 'r'},
+        {"direction", required_argument, NULL, 'd'},
+        {"shadow", required_argument, NULL, 's'},
+        {"fade", optional_argument, NULL, 'f'},
+        {"solid", no_argument, NULL, 'o'},
+        {"verbose", no_argument, NULL, 'v'},
+        {"version", no_argument, NULL, 'V'},
+        {"help", no_argument, NULL, 'h'}
+    };
+
+    // Parse the command line args
+    while((c = getopt_long(argc, argv, "c:r:d:s:f::ohvVp:", longOpts, &optIndex)) != -1) {
+        switch (c) {
+            // Color
+            case 'c':
+                if(strcmp(optarg, "multi") == 0) color = MULTI;
+                else if(strcmp(optarg, "red") == 0) color = RED;
+                else if(strcmp(optarg, "orange") == 0) color = ORANGE;
+                else if(strcmp(optarg, "yellow") == 0) color = YELLOW;
+                else if(strcmp(optarg, "green") == 0) color = GREEN;
+                else if(strcmp(optarg, "blue") == 0) color = BLUE;
+                else if(strcmp(optarg, "purple") == 0) color = PURPLE;
+                else if(strcmp(optarg, "white") == 0) color = WHITE;
+                else {
+                    printUsage();
+                    exit(ABNORMAL_EXIT);
+                }
+                break;
+            // Rotation speed
+            case 'r':
+                if(strcmp(optarg, "none") == 0 || strcmp(optarg, "n") == 0) rotationSpeed = ROT_NONE;
+                else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) rotationSpeed = ROT_VERY_SLOW;
+                else if(strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
+                else if(strcmp(optarg, "normal") == 0) rotationSpeed = ROT_NORMAL;
+                else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
+                else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
+                else {
+                    printUsage();
+                    exit(ABNORMAL_EXIT);
+                }
+                break;
+            // Rotation direction
+            case 'd':
+                if(strcmp(optarg, "cw") == 0) rotationDir = ROT_CW;
+                else if(strcmp(optarg, "ccw") == 0) rotationDir = ROT_CCW;
+                else {
+                    printUsage();
+                    exit(ABNORMAL_EXIT);
+                }
+                break;
+            // Shadow length
+            case 's':
+                if(strcmp(optarg, "none") == 0 || strcmp(optarg, "n") == 0) shadowLength = SDW_NONE;
+                else if(strcmp(optarg, "very_small") == 0 || strcmp(optarg, "vs") == 0) shadowLength = SDW_VERY_SMALL;
+                else if(strcmp(optarg, "small") == 0 || strcmp(optarg, "s") == 0) shadowLength = SDW_SMALL;
+                else if(strcmp(optarg, "normal") == 0) shadowLength = SDW_NORMAL;
+                else if(strcmp(optarg, "long") == 0 || strcmp(optarg, "l") == 0) shadowLength = SDW_LONG;
+                else if(strcmp(optarg, "very_long") == 0 || strcmp(optarg, "vl") == 0) shadowLength = SDW_VERY_LONG;
+                else {
+                    printUsage();
+                    exit(ABNORMAL_EXIT);
+                }
+                break;
+            // Fade
+            case 'f':
+                if(optarg == NULL || strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
+                else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) rotationSpeed = ROT_VERY_SLOW;
+                else if(strcmp(optarg, "normal") == 0 || strcmp(optarg, "n") == 0) rotationSpeed = ROT_NORMAL;
+                else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
+                else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
+                else {
+                    printUsage();
+                    exit(ABNORMAL_EXIT);
+                }
+                shadowLength = SDW_NONE;
+                break;
+            // Solid
+            case 'o':
+                rotationSpeed = ROT_NONE;
+                shadowLength = SDW_NONE;
+                break;
+            // Print help
+            case 'h':
+                printUsage();
+                exit(NORMAL_EXIT);
+            // Print version
+            case 'V':
+                printVersion();
+                exit(NORMAL_EXIT);
+            // Set verbosity level
+            case 'v':
+                verbose++;
+                break;
+            case '?':
+            default:
+                fprintf(stderr, "%s: Use \"%s -h\" for usage information.\n", prog, prog);
+                exit(ABNORMAL_EXIT);
+        }
+    }
+
+    // Get the device we're using
+    if(argc == optind+1) {
+        device = argv[optind];
+    } else if(argc > optind) {
+        fprintf(stderr, "%s: Too many arguments specified.\n", prog);
+        printUsage();
+        exit(ABNORMAL_EXIT);
+    } else {
+        // If a device wasn't specified, try a common one
+        printf("%s: Device not specified. Defaulting to \"%s\".\n", prog, DEFAULT_DEVICE);
+        device = DEFAULT_DEVICE;
+    }
+}
+
+
+char** getMessage(int *argc) {
+
+            // Check for new messages
+        if((_argv = getMessage(&_argc)) != NULL) {
+            // If there was a message, pass it on the process args to update the global behavior variables
+            processArgs(_argc, _argv);
+        }
+
+    static mqd_t mqd = -1;
+    struct mq_attr attr;
+
+    // Open the message queue if it isn't already open
+    if(mqd == -1 && (mqd = mq_open(MQ_NAME, O_RDONLY | O_NONBLOCK)) == -1) {
+        // Only display an error if the error opening the queue was something other
+        // than the queue not existing
+        if(errno != ENOENT) {
+            fprintf(stderr, "Error opening queue: %s\n", strerror(errno));
+        }
+        return NULL;
+    }
+
+    if(verbose >= TPL_VERBOSE) {
+        printf("%s: Connected to message queue. Checking for messages...\n", prog);
+    }
+
+    while(1) {
+    // Queue attributes
+    if(mq_getattr(mqd, &attr) == -1) {
+        fprintf(stderr, "Error getting message queue attributes: %s\n", strerror(errno));
+        return NULL;
+    }
+
+    // Create the buffer for the queue message from the max message size of the queue
+    char *buf = malloc(attr.mq_msgsize);
+    if(buf == NULL) {
+        fprintf(stderr, "Failed to allocate memory for message queue buffer.\n");
+        return NULL;
+    }
+
+    if(verbose >= DBL_VERBOSE) {
+        printf("%s: Number of messages in queue: %d\n", prog, (int)attr.mq_curmsgs);
+    }
+
+    // Check that there are at least two messages in the queue
+    if(attr.mq_curmsgs < 2) return NULL;
+
+    // Get the first message which is the argument count
+    if(mq_receive(mqd, buf, attr.mq_msgsize, 0) == -1) {
+        fprintf(stderr, "Failed to recieve message in queue: %s\n", strerror(errno));
+    }
+
+    if(verbose >= DBL_VERBOSE) {
+        fprintf(stderr, "%s: Got message: %s\n", prog, buf);
+    }
+
+    // Convert argc message to an int
+    sscanf(buf, "%d", argc);
+
+    // Get the arguments in a flattened string
+    if(mq_receive(mqd, buf, attr.mq_msgsize, 0) == -1) {
+        fprintf(stderr, "Failed to recieve message in queue: %s\n", strerror(errno));
+    }
+
+    if(verbose >= DBL_VERBOSE) {
+        fprintf(stderr, "%s: Got message: %s\n", prog, buf);
+    }
+
+    // Tokenize the buffer back to an array
+    char **argv = malloc(attr.mq_msgsize);
+    char *arg = strtok(buf, " ");
+    int i = 0;
+    while(arg != NULL) {
+        argv[i] = arg;
+        arg = strtok(NULL, " ");
+        i++;
+    }
+
+    return argv;
+}
+
+
+void sigHandler(int sig) {
+    if(sig != SIGINT && sig != SIGTERM) {
+        fprintf(stderr, "%s: Signal handler recieved incorrect signal", prog);
+        return;
+    }
+
+    // Delete the message queue
+    if(verbose >= DBL_VERBOSE) {
+        printf("%s: Deleting message queue\n", prog);
+    }
+    mq_unlink(MQ_NAME);
+
+    exit(0);
+}
+
+
+int installSigHandler(int sig, sighandler_t func) {
+    struct sigaction sigact;
+    
+    sigact.sa_handler = func;
+    sigemptyset(&sigact.sa_mask);
+    sigact.sa_flags = SA_RESTART;
+
+    if(sigaction(sig, &sigact, NULL) == -1) {
+        fprintf(stderr, "%s: Failed to install signal hander for signal %d: %s\n", prog, sig, strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+
 void printUsage(void) {
 	printf("Usage: %s [options] [device]\n", prog);
     
@@ -465,7 +600,7 @@ void printUsage(void) {
     printf("\t\tTakes no arguments. Simply shows the selected color at full brightness\n\n");
     
     printf("\t--verbose\t-v\t\tIncrease verbosity. Can be specified multiple times.\n");
-    printf("\t\tSingle verbose will show \"frame rate\" and bytes/sec. Double verbose is \n\t\tcurrently the same as single verbose. Triple verbose will show all info\n\t\t\
+    printf("\t\tSingle verbose will show \"frame rate\" and bytes/sec. Double verbose is \n\t\tshows message queue info. Triple verbose will show all info\n\t\t\
 being sent to the device. This is useful for visualizing how the options\n\t\tabove affect what data is sent to the device.\n\n");
 
     printf("\t--version\t-V\t\tDisplay version and exit\n");
