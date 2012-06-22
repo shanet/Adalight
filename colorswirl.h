@@ -35,10 +35,12 @@ arrangement for your specific configuration.
 
 
 #define NUM_LEDS       25
-#define DEFAULT_DEVICE "/dev/ttyACM0"
 
 #define NORMAL_EXIT   0
 #define ABNORMAL_EXIT 1
+
+#define TRUE  1
+#define FALSE 0
 
 // Verbosity options
 #define NO_VERBOSE  0
@@ -64,6 +66,14 @@ arrangement for your specific configuration.
 #define ROT_FAST      4
 #define ROT_VERY_FAST 5
 
+// Fade speed options
+#define FADE_NONE      0
+#define FADE_VERY_SLOW 1
+#define FADE_SLOW      2
+#define FADE_NORMAL    3
+#define FADE_FAST      4
+#define FADE_VERY_FAST 5
+
 // Rotation direction options
 #define ROT_CW  0
 #define ROT_CCW 1
@@ -83,6 +93,7 @@ static int color;          // Selected color
 static int rotationSpeed;  // Selected rotation speed
 static int rotationDir;    // Selected rotation direction
 static int shadowLength;   // Selected shadow length
+static int fadeSpeed;      // If the solid flag was selected
 static time_t curTime;     // The current time
 static time_t startTime;   // Time of program start
 static time_t prevTime;    // Previous current time
@@ -98,5 +109,3 @@ void updateHue(int *curHue);
 void sendBuffer(unsigned char *buffer, size_t bufLen, int fd);
 void sigHandler(int sig);
 int installSigHandler(int sig, sighandler_t func);
-void printUsage(void);
-void printVersion(void);

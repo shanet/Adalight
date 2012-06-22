@@ -1,23 +1,24 @@
 /*
-
-Colorswirl
-
-Author: Shane Tully
-
-Source:      https://github.com/shanet/Adalight
-Forked from: https://github.com/adafruit/Adalight
-
-This is the host PC-side code written in C; intended for use with a 
-USB-connected Arduino microcontroller running the accompanying LED 
-streaming code.  Requires one strand of  Digital RGB LED Pixels 
-(Adafruit product ID #322, specifically the newer WS2801-based 
-type, strand of 25) and a 5 Volt power supply (such as 
-Adafruit #276).  You may need to adapt the code and  the hardware 
-arrangement for your specific configuration.
-
-*/
+ *
+ * Colorswirl
+ *
+ * Author: Shane Tully
+ *
+ * Source:      https://github.com/shanet/Adalight
+ * Forked from: https://github.com/adafruit/Adalight
+ *
+ * This is the host PC-side code written in C; intended for use with a 
+ * USB-connected Arduino microcontroller running the accompanying LED 
+ * streaming code.  Requires one strand of  Digital RGB LED Pixels 
+ * (Adafruit product ID #322, specifically the newer WS2801-based 
+ * type, strand of 25) and a 5 Volt power supply (such as 
+ * Adafruit #276).  You may need to adapt the code and  the hardware 
+ * arrangement for your specific configuration.
+ *
+ */
 
 #include "colorswirl.h"
+#include "usage.h"
 
 int main(int argc, char **argv) {
     int brightness;           // Current brightness
@@ -36,12 +37,13 @@ int main(int argc, char **argv) {
     unsigned char buffer[6 + (NUM_LEDS * 3)]; // Header + 3 bytes per LED
 
     // Init globals
-    prog = argv[0];
-    startTime = prevTime = time(NULL);
-    color = MULTI;
+    prog          = argv[0];
+    startTime     = prevTime = time(NULL);
+    color         = MULTI;
     rotationSpeed = ROT_NORMAL;
-    rotationDir = ROT_CW;
-    shadowLength = SDW_NORMAL;
+    rotationDir   = ROT_CW;
+    shadowLength  = SDW_NORMAL;
+    fadeSpeed     = FADE_NONE;
 
     // Install SIGINT and SIGTERM handlers
     installSigHandler(SIGINT, sigHandler);
@@ -94,6 +96,29 @@ int main(int argc, char **argv) {
             updateShadowPosition(&shadowPosition);
         }
 
+        // If color is multi and fade flag was selected, do a slow fade between colors with the rot speed
+        if(fadeSpeed != FADE_NONE && color == MULTI) {
+            // Sleep times are in ms
+            switch(fadeSpeed) {
+                case FADE_VERY_SLOW:
+                    usleep(1000*180);
+                    break;
+                case FADE_SLOW:
+                    usleep(1000*130);
+                    break;
+                default:
+                case FADE_NORMAL:
+                    usleep(1000*90);
+                    break;
+                case FADE_FAST:
+                    usleep(1000*30);
+                    break;
+                case FADE_VERY_FAST:
+                    usleep(1000*10);
+                    break;
+            }
+        }
+
         // Slowly rotate hue and brightness in opposite directions
         updateHue(&curHue);
         updateLightPosition(&curLightPosition);
@@ -122,11 +147,11 @@ int openTTY(char *device) {
 
     // Serial port config swiped from RXTX library (rxtx.qbang.org):
     tcgetattr(fd, &tty);
-    tty.c_iflag = INPCK;
-    tty.c_lflag = 0;
-    tty.c_oflag = 0;
-    tty.c_cflag = CREAD | CS8 | CLOCAL;
-    tty.c_cc[VMIN] = 0;
+    tty.c_iflag     = INPCK;
+    tty.c_lflag     = 0;
+    tty.c_oflag     = 0;
+    tty.c_cflag     = CREAD | CS8 | CLOCAL;
+    tty.c_cc[VMIN]  = 0;
     tty.c_cc[VTIME] = 0;
     cfsetispeed(&tty, B115200);
     cfsetospeed(&tty, B115200);
@@ -354,14 +379,14 @@ int processArgs(int argc, char **argv, char **device) {
         {"direction", required_argument, NULL, 'd'},
         {"shadow", required_argument, NULL, 's'},
         {"fade", optional_argument, NULL, 'f'},
-        {"solid", no_argument, NULL, 'o'},
+        {"solid", optional_argument, NULL, 'o'},
         {"verbose", no_argument, NULL, 'v'},
         {"version", no_argument, NULL, 'V'},
         {"help", no_argument, NULL, 'h'}
     };
 
     // Parse the command line args
-    while((c = getopt_long(argc, argv, "c:r:d:s:f::ohvVp:", longOpts, &optIndex)) != -1) {
+    while((c = getopt_long(argc, argv, "c:r:d:s:f::o::hvVp:", longOpts, &optIndex)) != -1) {
         switch (c) {
             // Color
             case 'c':
@@ -374,7 +399,7 @@ int processArgs(int argc, char **argv, char **device) {
                 else if(strcmp(optarg, "purple") == 0) color = PURPLE;
                 else if(strcmp(optarg, "white") == 0) color = WHITE;
                 else {
-                    printUsage();
+                    printUsage(prog);
                     return -1;
                 }
                 break;
@@ -387,7 +412,7 @@ int processArgs(int argc, char **argv, char **device) {
                 else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
                 else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
                 else {
-                    printUsage();
+                    printUsage(prog);
                     return -1;
                 }
                 break;
@@ -396,7 +421,7 @@ int processArgs(int argc, char **argv, char **device) {
                 if(strcmp(optarg, "cw") == 0) rotationDir = ROT_CW;
                 else if(strcmp(optarg, "ccw") == 0) rotationDir = ROT_CCW;
                 else {
-                    printUsage();
+                    printUsage(prog);
                     return -1;
                 }
                 break;
@@ -409,7 +434,7 @@ int processArgs(int argc, char **argv, char **device) {
                 else if(strcmp(optarg, "long") == 0 || strcmp(optarg, "l") == 0) shadowLength = SDW_LONG;
                 else if(strcmp(optarg, "very_long") == 0 || strcmp(optarg, "vl") == 0) shadowLength = SDW_VERY_LONG;
                 else {
-                    printUsage();
+                    printUsage(prog);
                     return -1;
                 }
                 break;
@@ -421,23 +446,32 @@ int processArgs(int argc, char **argv, char **device) {
                 else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
                 else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
                 else {
-                    printUsage();
+                    printUsage(prog);
                     return -1;
                 }
                 shadowLength = SDW_NONE;
                 break;
             // Solid
             case 'o':
+                if(optarg == NULL || strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) fadeSpeed = FADE_SLOW;
+                else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) fadeSpeed = FADE_VERY_SLOW;
+                else if(strcmp(optarg, "normal") == 0 || strcmp(optarg, "n") == 0) fadeSpeed = FADE_NORMAL;
+                else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) fadeSpeed = FADE_FAST;
+                else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) fadeSpeed = FADE_VERY_FAST;
+                else {
+                    printUsage(prog);
+                    return -1;
+                }
                 rotationSpeed = ROT_NONE;
                 shadowLength = SDW_NONE;
                 break;
             // Print help
             case 'h':
-                printUsage();
+                printUsage(prog);
                 exit(NORMAL_EXIT);
             // Print version
             case 'V':
-                printVersion();
+                printVersion(prog);
                 exit(NORMAL_EXIT);
             // Set verbosity level
             case 'v':
@@ -445,7 +479,7 @@ int processArgs(int argc, char **argv, char **device) {
                 break;
             case '?':
             default:
-                printUsage();
+                printUsage(prog);
                 return -1;
         }
     }
@@ -455,7 +489,7 @@ int processArgs(int argc, char **argv, char **device) {
         *device = argv[optind];
     } else if(argc > optind) {
         fprintf(stderr, "%s: Too many arguments specified.\n", prog);
-        printUsage();
+        printUsage(prog);
         return -1;
     } else if(device != NULL) {
         // If a device wasn't specified, try a common one
@@ -582,45 +616,4 @@ int installSigHandler(int sig, sighandler_t func) {
     }
 
     return 0;
-}
-
-
-void printUsage(void) {
-	printf("Usage: %s [options] [device]\n", prog);
-    
-    printf("\t--color\t\t-c\t\tColor to use\n");
-    printf("\t\tSupported colors:\n\t\t  multi (default)\n\t\t  red\n\t\t  orange\n\t\t  yellow\n\t\t  green\n\t\t  blue\n\t\t  purple\n\t\t  white\n\n");
-    
-    printf("\t--rotation\t-r\t\tRotation speed\n");
-    printf("\t\tSupported rotation speeds:\n\t\t  n\tnone\n\t\t  vs\tvery_slow\n\t\t  s\tslow\n\t\t  \tnormal (default)\n\t\t  f\tfast\n\t\t  vf\tvery_fast\n\n");
-    
-    printf("\t--direction\t-d\t\tRotation direction\n");
-    printf("\t\tSupported directions:\n\t\t  cw\tClockwise (default)\n\t\t  ccw\tCounter-clockwise\n\n");
-    
-    printf("\t--shadow\t-s\t\tShadow length\n");
-    printf("\t\tSupported shadow lengths:\n\t\t  n\tnone\n\t\t  vs\tvery_small\n\t\t  s\tsmall\n\t\t  \tnormal (default)\n\t\t  l\tlong\n\t\t  vl\tvery_long\n\t\t\n\n");
-
-    printf("\t--fade\t\t-f\t\tFade speed (shorthand for no rotation, slow shadow)\n");
-    printf("\t\tThis option takes an optional argument. Arguments must be specified \n\t\tvia the form \"--fade=[speed]\" or \"-f[speed]\"\n");
-    printf("\t\tSupported fade speeds:\n\t\t  vs\tvery_slow\n\t\t  s\tslow (default)\n\t\t  n\tnormal\n\t\t  f\tfast\n\t\t  vf\tvery_fast\n\n");
-    
-    printf("\t--solid\t\t-o\t\tShorthand for no rotation, no shadow\n");
-    printf("\t\tTakes no arguments. Simply shows the selected color at full brightness\n\n");
-    
-    printf("\t--verbose\t-v\t\tIncrease verbosity. Can be specified multiple times.\n");
-    printf("\t\tSingle verbose will show \"frame rate\" and bytes/sec. Double verbose is \n\t\tshows message queue info. Triple verbose will show all info\n\t\t\
-being sent to the device. This is useful for visualizing how the options\n\t\tabove affect what data is sent to the device.\n\n");
-
-    printf("\t--version\t-V\t\tDisplay version and exit\n");
-    printf("\t--help\t\t-h\t\tDisplay this message and exit\n\n");
-    
-    printf("\tDevice is the path to the block device to write data to. If not specified,\n\tdefaults to \"%s\"\n\n", DEFAULT_DEVICE);
-
-    printf("\tOptions are parsed from left to right. For example, specifying --solid and then\n\t--shadow will NOT result in a solid color.\
-            \n\n\tIf all this seems confusing, just play with the options and try triple verbose.\n");
-}
-
-
-void printVersion(void) {
-	printf("%s: Version %s\n", prog, VERSION);
 }

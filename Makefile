@@ -1,14 +1,21 @@
+# Colorswirl
+#
+# Author: Shane Tully
+#
+# Source:      https://github.com/shanet/Adalight
+# Forked from: https://github.com/adafruit/Adalight
+
 CC = gcc
 LANG = c
 
 NAME = colorswirl
 UPDATE_NAME = colorswirl_update
-VERSION = "\"1.0.0\""
+VERSION = "\"1.1.0\""
 
 BINARY = $(NAME)
 UPDATE_BINARY = $(UPDATE_NAME)
-SRC = colorswirl.c
-UPDATE_SRC = colorswirl_update.c
+SRC = colorswirl.c usage.c
+UPDATE_SRC = colorswirl_update.c usage.c
 LIBS = -lm -lrt -pthread
 
 MACROS = -DVERSION=$(VERSION) -DMQ_NAME="\"/$(NAME)\"" -D_GNU_SOURCE -DMAX_MSG_LEN=128

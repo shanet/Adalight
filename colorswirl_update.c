@@ -1,3 +1,18 @@
+/*
+ *
+ * Colorswirl
+ *
+ * Author: Shane Tully
+ *
+ * Source:      https://github.com/shanet/Adalight
+ * Forked from: https://github.com/adafruit/Adalight
+ *
+ * This is a helper program that allows for the dynamic updating of colorswirl options
+ * without restarting the colorswirl process. It simply passes it's arguments off to 
+ * colorswirl via the message queue.
+ *
+ */
+
 #include <errno.h>
 #include <mqueue.h>
 #include <fcntl.h>
@@ -5,6 +20,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "usage.h"
 
 int main(int argc, char **argv) {
     mqd_t mqd;
@@ -14,6 +31,16 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%s: Too many arguments.\n", argv[0]);
         return 1;
     }
+
+    // Display help or version if requested
+    if(strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+        printUsage(*argv);
+        return 0;
+    } else if(strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0) {
+        printVersion(*argv);
+        return 0;
+    }
+    
     // Set the max message length as MAX_MSG_LEN
     struct mq_attr attr = {
         .mq_flags = 0,
