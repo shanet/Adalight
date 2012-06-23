@@ -1,6 +1,7 @@
 # Colorswirl
 ### Forked from: https://github.com/adafruit/Adalight
-#### Author: Shane Tully
+#### Shane Tully (shane@shanetully.com)
+#### shanetully.com 
 
 This is a fork of the Colorswirl demo for the Adalight project which has been extended to support many more options than the original Colorswirl program. It was created due to the screen sampling program in the original repo being too slow to use on Linux (blame Java, not the author of the program).
 
@@ -79,4 +80,17 @@ The colorswirl_update program allows for dynamic changing of LED behavior while 
 
         Options are parsed from left to right. For example, specifying --solid and then --shadow will NOT result in a solid color.
         
-        If all this seems confusing, just play with the options and try triple verbose.   
+        If all this seems confusing, just play with the options and try triple verbose. 
+
+## Support
+This program is a little side project and carries no warranty or support
+from its author. However, bugs and feature requests may be submitted to the GitHub repo
+linked to above.
+
+
+## Legal
+This program is open source software. It is free to distribute, modify, and use
+with the exception of it being made closed source and sold for commercial purposes
+without the consent of the author. However, the author simply requests that if you 
+do something cool with it, you let him check it out by emailing shane@shanetully.com 
+or just let him know you find it useful.
