@@ -17,7 +17,7 @@
 
 BIN_PATH=/usr/sbin/
 BINARY=colorswirl
-ARGS=--color=multi --solid --fade
+ARGS="--color=multi --solid"
 USER=root
 
 export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
