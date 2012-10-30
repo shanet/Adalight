@@ -89,6 +89,7 @@ arrangement for your specific configuration.
 
 char *prog;                // Name of the program
 int verbose;               // Verbosity level
+int noFork;                // Flag for not forking on startup
 static int color;          // Selected color
 static int rotationSpeed;  // Selected rotation speed
 static int rotationDir;    // Selected rotation direction

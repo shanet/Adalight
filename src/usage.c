@@ -34,6 +34,7 @@ void printUsage(char *prog) {
     printf("\t\tSimply shows the selected color at full brightness. Takes an optional fade speed for fading between colors if multi color is selected.\n\n");
     printf("\t\tSupported fade speeds:\n\t\t  vs\tvery_slow\n\t\t  s\tslow\n\t\t  \tnormal (default)\n\t\t  f\tfast\n\t\t  vf\tvery_fast\n\n");
     
+    printf("\t--no-fork\t-F\t\tDon't fork on start; not implemented in the update program.\n");
     printf("\t--verbose\t-v\t\tIncrease verbosity. Can be specified multiple times.\n");
     printf("\t\tSingle verbose will show \"frame rate\" and bytes/sec. Double verbose is \n\t\tshows message queue info. Triple verbose will show all info\n\t\t\
 being sent to the device. This is useful for visualizing how the options\n\t\tabove affect what data is sent to the device.\n\n");

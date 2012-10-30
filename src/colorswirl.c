@@ -31,13 +31,14 @@ int main(int argc, char **argv) {
         
     int fd;                   // File descriptor of the open device
     char *device = NULL;      // The device to send LED info to
-    pthread_t tid;
+    pthread_t tid;            // Thread ID of the message thread
 
 
     unsigned char buffer[6 + (NUM_LEDS * 3)]; // Header + 3 bytes per LED
 
     // Init globals
     prog          = argv[0];
+    noFork        = 0;
     startTime     = prevTime = time(NULL);
     color         = MULTI;
     rotationSpeed = ROT_NORMAL;
@@ -52,6 +53,17 @@ int main(int argc, char **argv) {
     // Process command line args
     if(processArgs(argc, argv, &device) == -1) {
         exit(ABNORMAL_EXIT);
+    }
+
+    // This is a system service. Fork and return control to whatever started us unless requested otherwise
+    pid_t pid;
+    if(!noFork) {
+        if((pid = fork()) == -1) {
+            fprintf(stderr, "%s: Failed to fork on startup\n", prog);
+            return ABNORMAL_EXIT;
+        } else if(pid != 0) {
+            return NORMAL_EXIT;
+        }
     }
 
     // Start the message thread
@@ -374,15 +386,16 @@ int processArgs(int argc, char **argv, char **device) {
 
     // Valid long options
     static struct option longOpts[] = {
-        {"color", required_argument, NULL, 'c'},
+        {"color",    required_argument, NULL, 'c'},
         {"rotation", required_argument, NULL, 'r'},
-        {"direction", required_argument, NULL, 'd'},
-        {"shadow", required_argument, NULL, 's'},
-        {"fade", optional_argument, NULL, 'f'},
-        {"solid", optional_argument, NULL, 'o'},
-        {"verbose", no_argument, NULL, 'v'},
-        {"version", no_argument, NULL, 'V'},
-        {"help", no_argument, NULL, 'h'}
+        {"direction",required_argument, NULL, 'd'},
+        {"shadow",   required_argument, NULL, 's'},
+        {"fade",     optional_argument, NULL, 'f'},
+        {"solid",    optional_argument, NULL, 'o'},
+        {"no-fork",  no_argument,       NULL, 'F'},
+        {"verbose",  no_argument,       NULL, 'v'},
+        {"version",  no_argument,       NULL, 'V'},
+        {"help",     no_argument,       NULL, 'h'}
     };
 
     // Parse the command line args
@@ -390,14 +403,14 @@ int processArgs(int argc, char **argv, char **device) {
         switch (c) {
             // Color
             case 'c':
-                if(strcmp(optarg, "multi") == 0) color = MULTI;
-                else if(strcmp(optarg, "red") == 0) color = RED;
+                if     (strcmp(optarg, "multi")  == 0) color = MULTI;
+                else if(strcmp(optarg, "red")    == 0) color = RED;
                 else if(strcmp(optarg, "orange") == 0) color = ORANGE;
                 else if(strcmp(optarg, "yellow") == 0) color = YELLOW;
-                else if(strcmp(optarg, "green") == 0) color = GREEN;
-                else if(strcmp(optarg, "blue") == 0) color = BLUE;
+                else if(strcmp(optarg, "green")  == 0) color = GREEN;
+                else if(strcmp(optarg, "blue")   == 0) color = BLUE;
                 else if(strcmp(optarg, "purple") == 0) color = PURPLE;
-                else if(strcmp(optarg, "white") == 0) color = WHITE;
+                else if(strcmp(optarg, "white")  == 0) color = WHITE;
                 else {
                     printUsage(prog);
                     return -1;
@@ -405,11 +418,11 @@ int processArgs(int argc, char **argv, char **device) {
                 break;
             // Rotation speed
             case 'r':
-                if(strcmp(optarg, "none") == 0 || strcmp(optarg, "n") == 0) rotationSpeed = ROT_NONE;
+                if     (strcmp(optarg, "none")      == 0 || strcmp(optarg, "n")  == 0) rotationSpeed = ROT_NONE;
                 else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) rotationSpeed = ROT_VERY_SLOW;
-                else if(strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
-                else if(strcmp(optarg, "normal") == 0) rotationSpeed = ROT_NORMAL;
-                else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
+                else if(strcmp(optarg, "slow")      == 0 || strcmp(optarg, "s")  == 0) rotationSpeed = ROT_SLOW;
+                else if(strcmp(optarg, "normal")    == 0)                              rotationSpeed = ROT_NORMAL;
+                else if(strcmp(optarg, "fast")      == 0 || strcmp(optarg, "f")  == 0) rotationSpeed = ROT_FAST;
                 else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
                 else {
                     printUsage(prog);
@@ -418,7 +431,7 @@ int processArgs(int argc, char **argv, char **device) {
                 break;
             // Rotation direction
             case 'd':
-                if(strcmp(optarg, "cw") == 0) rotationDir = ROT_CW;
+                if     (strcmp(optarg, "cw")  == 0) rotationDir = ROT_CW;
                 else if(strcmp(optarg, "ccw") == 0) rotationDir = ROT_CCW;
                 else {
                     printUsage(prog);
@@ -427,12 +440,12 @@ int processArgs(int argc, char **argv, char **device) {
                 break;
             // Shadow length
             case 's':
-                if(strcmp(optarg, "none") == 0 || strcmp(optarg, "n") == 0) shadowLength = SDW_NONE;
+                if     (strcmp(optarg, "none")       == 0 || strcmp(optarg, "n")  == 0) shadowLength = SDW_NONE;
                 else if(strcmp(optarg, "very_small") == 0 || strcmp(optarg, "vs") == 0) shadowLength = SDW_VERY_SMALL;
-                else if(strcmp(optarg, "small") == 0 || strcmp(optarg, "s") == 0) shadowLength = SDW_SMALL;
-                else if(strcmp(optarg, "normal") == 0) shadowLength = SDW_NORMAL;
-                else if(strcmp(optarg, "long") == 0 || strcmp(optarg, "l") == 0) shadowLength = SDW_LONG;
-                else if(strcmp(optarg, "very_long") == 0 || strcmp(optarg, "vl") == 0) shadowLength = SDW_VERY_LONG;
+                else if(strcmp(optarg, "small")      == 0 || strcmp(optarg, "s")  == 0) shadowLength = SDW_SMALL;
+                else if(strcmp(optarg, "normal")     == 0)                              shadowLength = SDW_NORMAL;
+                else if(strcmp(optarg, "long")       == 0 || strcmp(optarg, "l")  == 0) shadowLength = SDW_LONG;
+                else if(strcmp(optarg, "very_long")  == 0 || strcmp(optarg, "vl") == 0) shadowLength = SDW_VERY_LONG;
                 else {
                     printUsage(prog);
                     return -1;
@@ -440,10 +453,10 @@ int processArgs(int argc, char **argv, char **device) {
                 break;
             // Fade
             case 'f':
-                if(optarg == NULL || strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
+                if     (optarg == NULL || strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) rotationSpeed = ROT_SLOW;
                 else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) rotationSpeed = ROT_VERY_SLOW;
-                else if(strcmp(optarg, "normal") == 0 || strcmp(optarg, "n") == 0) rotationSpeed = ROT_NORMAL;
-                else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) rotationSpeed = ROT_FAST;
+                else if(strcmp(optarg, "normal")    == 0 || strcmp(optarg, "n")  == 0) rotationSpeed = ROT_NORMAL;
+                else if(strcmp(optarg, "fast")      == 0 || strcmp(optarg, "f")  == 0) rotationSpeed = ROT_FAST;
                 else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) rotationSpeed = ROT_VERY_FAST;
                 else {
                     printUsage(prog);
@@ -453,10 +466,10 @@ int processArgs(int argc, char **argv, char **device) {
                 break;
             // Solid
             case 'o':
-                if(optarg == NULL || strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) fadeSpeed = FADE_SLOW;
+                if     (optarg == NULL || strcmp(optarg, "slow") == 0 || strcmp(optarg, "s") == 0) fadeSpeed = FADE_SLOW;
                 else if(strcmp(optarg, "very_slow") == 0 || strcmp(optarg, "vs") == 0) fadeSpeed = FADE_VERY_SLOW;
-                else if(strcmp(optarg, "normal") == 0 || strcmp(optarg, "n") == 0) fadeSpeed = FADE_NORMAL;
-                else if(strcmp(optarg, "fast") == 0 || strcmp(optarg, "f") == 0) fadeSpeed = FADE_FAST;
+                else if(strcmp(optarg, "normal")    == 0 || strcmp(optarg, "n")  == 0) fadeSpeed = FADE_NORMAL;
+                else if(strcmp(optarg, "fast")      == 0 || strcmp(optarg, "f")  == 0) fadeSpeed = FADE_FAST;
                 else if(strcmp(optarg, "very_fast") == 0 || strcmp(optarg, "vf") == 0) fadeSpeed = FADE_VERY_FAST;
                 else {
                     printUsage(prog);
@@ -464,6 +477,10 @@ int processArgs(int argc, char **argv, char **device) {
                 }
                 rotationSpeed = ROT_NONE;
                 shadowLength = SDW_NONE;
+                break;
+            // No fork
+            case 'F':
+                noFork = 1;
                 break;
             // Print help
             case 'h':
