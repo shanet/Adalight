@@ -395,7 +395,8 @@ int processArgs(int argc, char **argv, char **device) {
         {"no-fork",  no_argument,       NULL, 'F'},
         {"verbose",  no_argument,       NULL, 'v'},
         {"version",  no_argument,       NULL, 'V'},
-        {"help",     no_argument,       NULL, 'h'}
+        {"help",     no_argument,       NULL, 'h'},
+        {NULL,      0,                  0,      0}
     };
 
     // Parse the command line args
