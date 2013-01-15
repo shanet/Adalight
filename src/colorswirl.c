@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
     pthread_create(&tid, NULL, messageLoop, NULL);
 
     // Open the device
-    if((fd = openTTY(device)) == -1) {
+    if((fd = openDevice(device)) == -1) {
         exit(ABNORMAL_EXIT);
     }
 
@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
         // Start at position 6, after the LED header/magic word
         unsigned int i = 6;
         while(i < sizeof(buffer)) {
-            updateColor(&r, &g, &b, curHue);
+            getLedColor(&r, &g, &b, curHue);
 
             // Resulting hue is multiplied by brightness in the
             // range of 0 to 255 (0 = off, 255 = brightest).
@@ -110,7 +110,6 @@ int main(int argc, char **argv) {
 
         // If color is multi and fade flag was selected, do a slow fade between colors with the rot speed
         if(fadeSpeed != FADE_NONE && color == MULTI) {
-            // Sleep times are in ms
             switch(fadeSpeed) {
                 case FADE_VERY_SLOW:
                     usleep(1000*180);
@@ -136,18 +135,20 @@ int main(int argc, char **argv) {
         updateLightPosition(&curLightPosition);
 
         // Send the data to the buffer
-        sendBuffer(buffer, sizeof(buffer), fd);
+        sendBufferToDevice(buffer, sizeof(buffer), fd);
     }
 
-    // Clean up
+    // Close the device
     close(fd);
+
+    // Unlink the message queue
     mq_unlink(MQ_NAME);
 
     return 0;
 }
 
 
-int openTTY(char *device) {
+int openDevice(char *device) {
     int fd = -1;
     struct termios tty;
 
@@ -173,7 +174,7 @@ int openTTY(char *device) {
 }
 
 
-void updateColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHue) {
+void getLedColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHue) {
     static unsigned char _r;
     static unsigned char _g;
     static unsigned char _b;
@@ -254,6 +255,45 @@ void updateColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHu
             _g = 0;
             _b = 128;
             break;
+        case COOL:
+            lo = curHue & 255;
+
+            switch((curHue >> 8) % 6) {
+                case 0:
+                    _r = 0;
+                    _g = lo;
+                    _b = 0;
+                    break;
+                case 1:
+                    _r = 0;
+                    _g = 255;
+                    _b = 0;
+                    break;
+                case 2:
+                    _r = 0;
+                    _g = 255;
+                    _b = lo;
+                    break;
+                case 3:
+                    _r = 0;
+                    _g = 255 - lo;
+                    _b = 255;
+                    break;
+                case 4:
+                    _r = 0;
+                    _g = 0;
+                    _b = 255;
+                    break;
+                case 5:
+                    _r = 0;
+                    _g = 0;
+                    _b = 255 - lo;
+                    break;
+            }
+
+            curHue += 40;
+            break;
+
         case WHITE:
         default:
             _r = 255;
@@ -322,7 +362,8 @@ void updateHue(int *curHue) {
     *curHue = hue = (hue + 5) % 1536;
 }
 
-void sendBuffer(unsigned char *buffer, size_t bufLen, int fd) {
+
+void sendBufferToDevice(unsigned char *buffer, size_t bufLen, int fd) {
     static int frame = 0;
     static int totalBytesSent = 0;
     int bytesWritten = 0;
@@ -412,6 +453,7 @@ int processArgs(int argc, char **argv, char **device) {
                 else if(strcmp(optarg, "blue")   == 0) color = BLUE;
                 else if(strcmp(optarg, "purple") == 0) color = PURPLE;
                 else if(strcmp(optarg, "white")  == 0) color = WHITE;
+                else if(strcmp(optarg, "cool")   == 0) color = COOL;
                 else {
                     printUsage(prog);
                     return -1;
@@ -553,40 +595,40 @@ void* messageLoop(void *tid) {
         }
 
         // Create the buffer for the queue message from the max message size of the queue
-        char *buf = malloc(attr.mq_msgsize);
-        if(buf == NULL) {
+        char *message = malloc(attr.mq_msgsize);
+        if(message == NULL) {
             fprintf(stderr, "Failed to allocate memory for message queue buffer. Exiting message queue thread.\n");
             pthread_exit(NULL);
         }
 
         // Get the first message which is the argument count
-        if((msgLen = mq_receive(mqd, buf, attr.mq_msgsize, 0)) == -1) {
+        if((msgLen = mq_receive(mqd, message, attr.mq_msgsize, 0)) == -1) {
             fprintf(stderr, "Failed to recieve message in queue: %s\n", strerror(errno));
             continue;
         }
-        buf[msgLen] = '\0';
+        message[msgLen] = '\0';
 
         if(verbose >= DBL_VERBOSE) {
-            fprintf(stderr, "%s: Got message (should be number of arguments): %s\n", prog, buf);
+            fprintf(stderr, "%s: Got message (should be number of arguments): %s\n", prog, message);
         }
 
         // Convert argc message to an int
-        sscanf(buf, "%d", &argc);
+        sscanf(message, "%d", &argc);
 
         // Get the arguments in a flattened string
-        if((msgLen = mq_receive(mqd, buf, attr.mq_msgsize, 0)) == -1) {
+        if((msgLen = mq_receive(mqd, message, attr.mq_msgsize, 0)) == -1) {
             fprintf(stderr, "Failed to recieve message in queue: %s\n", strerror(errno));
             continue;
         }
-        buf[msgLen] = '\0';
+        message[msgLen] = '\0';
 
         if(verbose >= DBL_VERBOSE) {
-            fprintf(stderr, "%s: Got message (should be %d arguments): %s\n", prog, argc, buf);
+            fprintf(stderr, "%s: Got message (should be %d arguments): %s\n", prog, argc, message);
         }
 
         // Tokenize the buffer back to an array
         char **argv = malloc(attr.mq_msgsize);
-        char *arg = strtok(buf, " ");
+        char *arg = strtok(message, " ");
         int i = 0;
         while(arg != NULL) {
             argv[i] = arg;
@@ -598,7 +640,9 @@ void* messageLoop(void *tid) {
         processArgs(argc, argv, NULL);
 
         free(argv);
+        free(message);
         argv = NULL;
+        message = NULL;
     }
 
     pthread_exit(NULL);

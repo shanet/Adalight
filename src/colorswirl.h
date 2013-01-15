@@ -57,6 +57,7 @@ arrangement for your specific configuration.
 #define BLUE   5
 #define PURPLE 6
 #define WHITE  7
+#define COOL   8
 
 // Rotation speed options
 #define ROT_NONE      0
@@ -102,11 +103,11 @@ static time_t prevTime;    // Previous current time
 
 int processArgs(int argc, char **argv, char **device);
 void* messageLoop(void*);
-int openTTY(char *device);
-void updateColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHue);
+int openDevice(char *device);
+void getLedColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHue);
 void updateLightPosition(double *lightPosition);
 void updateShadowPosition(double *shadowPosition);
 void updateHue(int *curHue);
-void sendBuffer(unsigned char *buffer, size_t bufLen, int fd);
+void sendBufferToDevice(unsigned char *buffer, size_t bufLen, int fd);
 void sigHandler(int sig);
 int installSigHandler(int sig, sighandler_t func);
