@@ -34,7 +34,7 @@ arrangement for your specific configuration.
 #include <getopt.h>
 
 
-#define NUM_LEDS       25
+#define NUM_LEDS 25
 
 #define NORMAL_EXIT   0
 #define ABNORMAL_EXIT 1
@@ -91,6 +91,7 @@ arrangement for your specific configuration.
 char *prog;                // Name of the program
 int verbose;               // Verbosity level
 int noFork;                // Flag for not forking on startup
+int isScreenSampling;      // Flag for sampling screen colors for LED color data
 static int color;          // Selected color
 static int rotationSpeed;  // Selected rotation speed
 static int rotationDir;    // Selected rotation direction
@@ -104,10 +105,12 @@ static time_t prevTime;    // Previous current time
 int processArgs(int argc, char **argv, char **device);
 void* messageLoop(void*);
 int openDevice(char *device);
+void getCalculatedLedData(unsigned char *ledData, size_t ledDataLen);
+void getSampledLedData(unsigned char *ledData, size_t ledDataLen);
 void getLedColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHue);
 void updateLightPosition(double *lightPosition);
 void updateShadowPosition(double *shadowPosition);
 void updateHue(int *curHue);
-void sendBufferToDevice(unsigned char *buffer, size_t bufLen, int fd);
+void sendLedDataToDevice(unsigned char *ledData, size_t ledDataLen, int deviceDescriptor);
 void sigHandler(int sig);
 int installSigHandler(int sig, sighandler_t func);

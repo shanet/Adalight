@@ -21,30 +21,23 @@
 #include "usage.h"
 
 int main(int argc, char **argv) {
-    int brightness;           // Current brightness
-    double shadowPosition;    // Current shadow position
-    double curLightPosition;  // Current light position (related to rotation speed)
-    int curHue = 0;           // Current hue
-    unsigned char r;          // Current red value
-    unsigned char g;          // Current green value
-    unsigned char b;          // Current blue value
-        
-    int fd;                   // File descriptor of the open device
-    char *device = NULL;      // The device to send LED info to
-    pthread_t tid;            // Thread ID of the message thread
+    int deviceDescriptor;
+    char *device = NULL;
+    pthread_t threadID;
 
-
-    unsigned char buffer[6 + (NUM_LEDS * 3)]; // Header + 3 bytes per LED
+    // Header + 3 bytes per LED
+    unsigned char ledData[6 + (NUM_LEDS * 3)]; 
 
     // Init globals
-    prog          = argv[0];
-    noFork        = 0;
-    startTime     = prevTime = time(NULL);
-    color         = MULTI;
-    rotationSpeed = ROT_NORMAL;
-    rotationDir   = ROT_CW;
-    shadowLength  = SDW_NORMAL;
-    fadeSpeed     = FADE_NONE;
+    prog             = argv[0];
+    noFork           = 0;
+    isScreenSampling = 0;
+    startTime        = prevTime = time(NULL);
+    color            = MULTI;
+    rotationSpeed    = ROT_NORMAL;
+    rotationDir      = ROT_CW;
+    shadowLength     = SDW_NORMAL;
+    fadeSpeed        = FADE_NONE;
 
     // Install SIGINT and SIGTERM handlers
     installSigHandler(SIGINT, sigHandler);
@@ -67,81 +60,36 @@ int main(int argc, char **argv) {
     }
 
     // Start the message thread
-    pthread_create(&tid, NULL, messageLoop, NULL);
+    pthread_create(&threadID, NULL, messageLoop, NULL);
 
     // Open the device
-    if((fd = openDevice(device)) == -1) {
+    if((deviceDescriptor = openDevice(device)) == -1) {
         exit(ABNORMAL_EXIT);
     }
 
-    // Clear LED buffer
-    memset(buffer, 0, sizeof(buffer));
+    // Clear LED ledData
+    memset(ledData, 0, sizeof(ledData));
 
-    // Header only needs to be initialized once, not
-    // inside rendering loop -- number of LEDs is constant:
-    buffer[0] = 'A';                            // Magic word
-    buffer[1] = 'd';
-    buffer[2] = 'a';
-    buffer[3] = (NUM_LEDS - 1) >> 8;            // LED count high byte
-    buffer[4] = (NUM_LEDS - 1) & 0xff;          // LED count low byte
-    buffer[5] = buffer[3] ^ buffer[4] ^ 0x55;   // Checksum
+    // Define the header of the LED data to be sent to the Arduino each loop iteration
+    ledData[0] = 'A';                            // Magic word
+    ledData[1] = 'd';
+    ledData[2] = 'a';
+    ledData[3] = (NUM_LEDS - 1) >> 8;            // LED count high byte
+    ledData[4] = (NUM_LEDS - 1) & 0xff;          // LED count low byte
+    ledData[5] = ledData[3] ^ ledData[4] ^ 0x55; // Checksum
 
     while(1) {
-        shadowPosition = curLightPosition;
-
-        // Start at position 6, after the LED header/magic word
-        unsigned int i = 6;
-        while(i < sizeof(buffer)) {
-            getLedColor(&r, &g, &b, curHue);
-
-            // Resulting hue is multiplied by brightness in the
-            // range of 0 to 255 (0 = off, 255 = brightest).
-            // Gamma corrrection (the 'pow' function here) adjusts
-            // the brightness to be more perceptually linear.
-            brightness = (shadowLength != SDW_NONE || rotationSpeed != ROT_NONE) ? (int)(pow(0.5 + sin(shadowPosition) * 0.5, 3.0) * 255.0) : 255;
-
-            buffer[i++] = (r * brightness) / 255;
-            buffer[i++] = (g * brightness) / 255;
-            buffer[i++] = (b * brightness) / 255;
-
-            // Each pixel is offset in both hue and brightness
-            updateShadowPosition(&shadowPosition);
+        if(isScreenSampling) {
+            getSampledLedData(ledData, sizeof(ledData));
+        } else {
+            getCalculatedLedData(ledData, sizeof(ledData));
         }
 
-        // If color is multi and fade flag was selected, do a slow fade between colors with the rot speed
-        if(fadeSpeed != FADE_NONE && color == MULTI) {
-            switch(fadeSpeed) {
-                case FADE_VERY_SLOW:
-                    usleep(1000*180);
-                    break;
-                case FADE_SLOW:
-                    usleep(1000*130);
-                    break;
-                default:
-                case FADE_NORMAL:
-                    usleep(1000*90);
-                    break;
-                case FADE_FAST:
-                    usleep(1000*30);
-                    break;
-                case FADE_VERY_FAST:
-                    usleep(1000*10);
-                    break;
-            }
-        }
-
-        // Slowly rotate hue and brightness in opposite directions
-        updateHue(&curHue);
-        updateLightPosition(&curLightPosition);
-
-        // Send the data to the buffer
-        sendBufferToDevice(buffer, sizeof(buffer), fd);
+        sendLedDataToDevice(ledData, sizeof(ledData), deviceDescriptor);
     }
 
-    // Close the device
-    close(fd);
-
-    // Unlink the message queue
+    // Close the device and unlink the message queue
+    close(deviceDescriptor);
     mq_unlink(MQ_NAME);
 
     return 0;
@@ -149,17 +97,17 @@ int main(int argc, char **argv) {
 
 
 int openDevice(char *device) {
-    int fd = -1;
+    int deviceDescriptor = -1;
     struct termios tty;
 
     // Try to open the device
-    if((fd = open(device, O_RDWR | O_NOCTTY | O_NONBLOCK)) == -1) {
+    if((deviceDescriptor = open(device, O_RDWR | O_NOCTTY | O_NONBLOCK)) == -1) {
         fprintf(stderr, "%s: Error opening device \"%s\": %s\n", prog, device, strerror(errno));
         return -1;
     }
 
     // Serial port config swiped from RXTX library (rxtx.qbang.org):
-    tcgetattr(fd, &tty);
+    tcgetattr(deviceDescriptor, &tty);
     tty.c_iflag     = INPCK;
     tty.c_lflag     = 0;
     tty.c_oflag     = 0;
@@ -168,9 +116,73 @@ int openDevice(char *device) {
     tty.c_cc[VTIME] = 0;
     cfsetispeed(&tty, B115200);
     cfsetospeed(&tty, B115200);
-    tcsetattr(fd, TCSANOW, &tty);
+    tcsetattr(deviceDescriptor, TCSANOW, &tty);
 
-    return fd;
+    return deviceDescriptor;
+}
+
+
+void getCalculatedLedData(unsigned char *ledData, size_t ledDataLen) {
+    static int brightness        = 0;
+    static double shadowPosition = 0;
+    static double lightPosition  = 0;
+    static int hue               = 0;
+
+    static unsigned char red;
+    static unsigned char green;
+    static unsigned char blue;
+
+    shadowPosition = lightPosition;
+
+    // Start at position 6, after the LED header/magic word
+    unsigned int i = 6;
+    while(i < ledDataLen) {
+        getLedColor(&red, &green, &blue, hue);
+
+        // Resulting hue is multiplied by brightness in the
+        // range of 0 to 255 (0 = off, 255 = brightest).
+        // Gamma corrrection (the 'pow' function here) adjusts
+        // the brightness to be more perceptually linear.
+        brightness = (shadowLength != SDW_NONE || rotationSpeed != ROT_NONE) ? (int)(pow(0.5 + sin(shadowPosition) * 0.5, 3.0) * 255.0) : 255;
+
+        ledData[i++] = (red   * brightness) / 255;
+        ledData[i++] = (green * brightness) / 255;
+        ledData[i++] = (blue  * brightness) / 255;
+
+        // Each pixel is offset in both hue and brightness
+        updateShadowPosition(&shadowPosition);
+    }
+
+    // If color is multi and fade flag was selected, do a slow fade between colors with the rot speed
+    if(fadeSpeed != FADE_NONE && color == MULTI) {
+        switch(fadeSpeed) {
+            case FADE_VERY_SLOW:
+                usleep(1000*180);
+                break;
+            case FADE_SLOW:
+                usleep(1000*130);
+                break;
+            default:
+            case FADE_NORMAL:
+                usleep(1000*90);
+                break;
+            case FADE_FAST:
+                usleep(1000*30);
+                break;
+            case FADE_VERY_FAST:
+                usleep(1000*10);
+                break;
+        }
+    }
+
+    // Slowly rotate hue and brightness in opposite directions
+    updateHue(&hue);
+    updateLightPosition(&lightPosition);
+}
+
+
+void getSampledLedData(unsigned char *ledData, size_t ledDataLen) {
+
 }
 
 
@@ -363,7 +375,7 @@ void updateHue(int *curHue) {
 }
 
 
-void sendBufferToDevice(unsigned char *buffer, size_t bufLen, int fd) {
+void sendLedDataToDevice(unsigned char *ledData, size_t ledDataLen, int deviceDescriptor) {
     static int frame = 0;
     static int totalBytesSent = 0;
     int bytesWritten = 0;
@@ -371,24 +383,24 @@ void sendBufferToDevice(unsigned char *buffer, size_t bufLen, int fd) {
     // Issue color data to LEDs.  Each OS is fussy in different
     // ways about serial output.  This arrangement of drain-and-
     // write-loop seems to be the most relable across platforms:
-    tcdrain(fd);
-    for(int bytesSent = 0, bytesToGo = bufLen; bytesToGo > 0;) {
-        // If triple verbose, print out the contents of buffer in pretty columns
+    tcdrain(deviceDescriptor);
+    for(int bytesSent = 0, bytesToGo = ledDataLen; bytesToGo > 0;) {
+        // If triple verbose, print out the contents of the LED data in pretty columns
         if(verbose >= TPL_VERBOSE) {
             printf("%s: Sending bytes:\n", prog);
-            printf("Magic Word: %c%c%c (%d %d %d)\n", *buffer, *(buffer+1), *(buffer+2), *buffer, *(buffer+1), *(buffer+2));
-            printf("LED count high/low byte: %d,%d\n", *(buffer+3), *(buffer+4));
-            printf("Checksum: %d\n", *(buffer+5));
+            printf("Magic Word: %c%c%c (%d %d %d)\n", *ledData, *(ledData+1), *(ledData+2), *ledData, *(ledData+1), *(ledData+2));
+            printf("LED count high/low byte: %d,%d\n", *(ledData+3), *(ledData+4));
+            printf("Checksum: %d\n", *(ledData+5));
             printf("          RED   |  GREEN  |  BLUE\n");
 
-            for(unsigned int i=6; i<bufLen; i++) {
+            for(unsigned int i=6; i<ledDataLen; i++) {
                 // Print the LED number every 3 loop iterations
                 if(i%3 == 0) {
                     printf("LED %2d:   ", i/3 - 1);
                 }
 
-                // Print the value in the buffer
-                printf("%3d   ", buffer[i]);
+                // Print the value in the current index
+                printf("%3d   ", ledData[i]);
 
                 // Print column separators for the first two columns and a newline for the third
                 if((i-2)%3 != 0) {
@@ -400,14 +412,14 @@ void sendBufferToDevice(unsigned char *buffer, size_t bufLen, int fd) {
             printf("\n\n");
         }
 
-        if((bytesWritten = write(fd, &buffer[bytesSent], bytesToGo)) > 0) {
+        if((bytesWritten = write(deviceDescriptor, &ledData[bytesSent], bytesToGo)) > 0) {
             bytesToGo -= bytesWritten;
             bytesSent += bytesWritten;
         }
     }
 
     // Keep track of byte and frame counts for statistics
-    totalBytesSent += sizeof(buffer);
+    totalBytesSent += sizeof(ledData);
     frame++;
 
     // Update statistics once per second
@@ -433,15 +445,16 @@ int processArgs(int argc, char **argv, char **device) {
         {"shadow",   required_argument, NULL, 's'},
         {"fade",     optional_argument, NULL, 'f'},
         {"solid",    optional_argument, NULL, 'o'},
+        {"sample",   no_argument,       NULL, 'm'},
         {"no-fork",  no_argument,       NULL, 'F'},
         {"verbose",  no_argument,       NULL, 'v'},
         {"version",  no_argument,       NULL, 'V'},
         {"help",     no_argument,       NULL, 'h'},
-        {NULL,      0,                  0,      0}
+        {NULL,       0,                 0,      0}
     };
 
     // Parse the command line args
-    while((c = getopt_long(argc, argv, "c:r:d:s:f::o::hvVp:", longOpts, &optIndex)) != -1) {
+    while((c = getopt_long(argc, argv, "c:r:d:s:f::o::mFhvVp:", longOpts, &optIndex)) != -1) {
         switch (c) {
             // Color
             case 'c':
@@ -521,6 +534,10 @@ int processArgs(int argc, char **argv, char **device) {
                 rotationSpeed = ROT_NONE;
                 shadowLength = SDW_NONE;
                 break;
+            // Screen sampling
+            case 'm':
+                isScreenSampling = 1;
+                break;
             // No fork
             case 'F':
                 noFork = 1;
@@ -561,13 +578,13 @@ int processArgs(int argc, char **argv, char **device) {
 }
 
 
-void* messageLoop(void *tid) {
+void* messageLoop(void *threadID) {
     mqd_t mqd = -1;
     int argc;
     int msgLen = 0;
 
-    // Do something with tid to make GCC happy and get rid of the unused parameter warning
-    tid++;
+    // Do something with threadID to make GCC happy and get rid of the unused parameter warning
+    threadID++;
 
     // Set the max message length as MAX_MSG_LEN
     struct mq_attr attr = {
