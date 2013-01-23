@@ -25,13 +25,16 @@ int main(int argc, char **argv) {
     char *device = NULL;
     pthread_t threadID;
 
-    // Header + 3 bytes per LED
+    // LED color info to send to the device
+    // Size is 6 byte header + 3 bytes per LED
     unsigned char ledData[6 + (NUM_LEDS * 3)]; 
+    unsigned char prevLedData[6 + (NUM_LEDS * 3)]; 
 
     // Init globals
     prog             = argv[0];
     noFork           = 0;
     isScreenSampling = 0;
+    XDisplay         = NULL;
     startTime        = prevTime = time(NULL);
     color            = MULTI;
     rotationSpeed    = ROT_NORMAL;
@@ -39,11 +42,9 @@ int main(int argc, char **argv) {
     shadowLength     = SDW_NORMAL;
     fadeSpeed        = FADE_NONE;
 
-    // Install SIGINT and SIGTERM handlers
     installSigHandler(SIGINT, sigHandler);
     installSigHandler(SIGTERM, sigHandler);
 
-    // Process command line args
     if(processArgs(argc, argv, &device) == -1) {
         exit(ABNORMAL_EXIT);
     }
@@ -59,28 +60,24 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Start the message thread
-    pthread_create(&threadID, NULL, messageLoop, NULL);
+    startMessageThread(&threadID);
 
-    // Open the device
-    if((deviceDescriptor = openDevice(device)) == -1) {
-        exit(ABNORMAL_EXIT);
+    deviceDescriptor = openDevice(device);
+
+    getLedDataHeader(ledData);
+
+    if(isScreenSampling) {
+        memset(prevLedData, 0, sizeof(prevLedData));
+        openXDisplay();
+        getScreenResolution();
+        calculateSamplePoints();
+        calculateGammaTable();
     }
-
-    // Clear LED ledData
-    memset(ledData, 0, sizeof(ledData));
-
-    // Define the header of the LED data to be sent to the Arduino each loop iteration
-    ledData[0] = 'A';                            // Magic word
-    ledData[1] = 'd';
-    ledData[2] = 'a';
-    ledData[3] = (NUM_LEDS - 1) >> 8;            // LED count high byte
-    ledData[4] = (NUM_LEDS - 1) & 0xff;          // LED count low byte
-    ledData[5] = ledData[3] ^ ledData[4] ^ 0x55; // Checksum
 
     while(1) {
         if(isScreenSampling) {
-            getSampledLedData(ledData, sizeof(ledData));
+            getSampledLedData(ledData, prevLedData);
+            updatePrevLedData(ledData, prevLedData, sizeof(ledData));
         } else {
             getCalculatedLedData(ledData, sizeof(ledData));
         }
@@ -96,6 +93,11 @@ int main(int argc, char **argv) {
 }
 
 
+void startMessageThread(pthread_t *threadID) {
+    pthread_create(threadID, NULL, messageLoop, NULL);
+}
+
+
 int openDevice(char *device) {
     int deviceDescriptor = -1;
     struct termios tty;
@@ -103,7 +105,7 @@ int openDevice(char *device) {
     // Try to open the device
     if((deviceDescriptor = open(device, O_RDWR | O_NOCTTY | O_NONBLOCK)) == -1) {
         fprintf(stderr, "%s: Error opening device \"%s\": %s\n", prog, device, strerror(errno));
-        return -1;
+        exit(ABNORMAL_EXIT);
     }
 
     // Serial port config swiped from RXTX library (rxtx.qbang.org):
@@ -119,6 +121,80 @@ int openDevice(char *device) {
     tcsetattr(deviceDescriptor, TCSANOW, &tty);
 
     return deviceDescriptor;
+}
+
+
+void getLedDataHeader(unsigned char *ledData) {
+    // Define the header of the LED data to be sent to the Arduino each loop iteration
+    ledData[0] = 'A';                            // Magic word
+    ledData[1] = 'd';
+    ledData[2] = 'a';
+    ledData[3] = (NUM_LEDS - 1) >> 8;            // LED count high byte
+    ledData[4] = (NUM_LEDS - 1) & 0xff;          // LED count low byte
+    ledData[5] = ledData[3] ^ ledData[4] ^ 0x55; // Checksum
+}
+
+
+void updatePrevLedData(unsigned char *ledData, unsigned char *prevLedData, int ledDataLen) {
+    for(int i=0; i<ledDataLen; i++) {
+        prevLedData[i] = ledData[i];
+    }
+}
+
+
+void openXDisplay() {
+    if(XDisplay == NULL) {
+        XDisplay = XOpenDisplay(NULL);
+
+        if(XDisplay == NULL) {
+            fprintf(stderr, "%s: Could not open X display.\n", prog);
+            exit(ABNORMAL_EXIT);
+        }
+    }
+}
+
+
+void getScreenResolution() {
+    XWindowAttributes attrs;
+    XGetWindowAttributes(XDisplay, DefaultRootWindow(XDisplay), &attrs);
+
+    screenWidth = attrs.width - 1440;
+    screenHeight = attrs.height;
+}
+
+
+void calculateSamplePoints() {
+    // Determine the width and height of a box
+    int samplePointOffset = screenWidth / NUM_LEDS;
+
+    int curX = 0;
+    for(int i=0; i<NUM_LEDS; i++) {
+        Point *samplePoint = malloc(sizeof(Point));
+        
+        if(samplePoint == NULL) {
+            fprintf(stderr, "%s: Failed to allocate memory.\n", prog);
+            exit(ABNORMAL_EXIT);
+        }
+
+        samplePoint->x = curX;
+        samplePoint->y = screenHeight/2;
+
+        samplePoints[i] = samplePoint;
+
+        curX += samplePointOffset;
+    }
+}
+
+
+void calculateGammaTable() {
+    double gamma;
+    for(int i=0; i<256; i++) {
+        gamma = pow((float)i / 255, 2.8);
+        gammaCorrection[i][0] = gamma * 255;
+        gammaCorrection[i][1] = gamma * 240;
+        gammaCorrection[i][2] = gamma * 220;
+        printf("%d: (%d, %d, %d)\n", i, gammaCorrection[i][0], gammaCorrection[i][1], gammaCorrection[i][2]);
+    }
 }
 
 
@@ -181,8 +257,91 @@ void getCalculatedLedData(unsigned char *ledData, size_t ledDataLen) {
 }
 
 
-void getSampledLedData(unsigned char *ledData, size_t ledDataLen) {
+void getSampledLedData(unsigned char *ledData, unsigned char *prevLedData) {
+    // For the LED data index (j), start at position 6, after the LED header/magic word
+    for(unsigned int i=0, j=NUM_LEDS*3; i<NUM_LEDS && j > 6; i++) {
+        XColor *color = getSamplePointColor(*(samplePoints[i]));
+           
+        blendPrevColors(color, i, prevLedData);
+        correctBrightness(color);
+        //correctGamma(color);
 
+        ledData[j--] = color->red;
+        ledData[j--] = color->green;
+        ledData[j--] = color->blue;
+
+        XFree(color);
+    }
+}
+
+
+XColor* getSamplePointColor(Point samplePoint) {
+    XImage *samplePointImage = getSamplePointImage(samplePoint);
+
+    XColor *color = malloc(sizeof(XColor));
+    if(color == NULL) {
+        fprintf(stderr, "%s: Failed to allocate memory.\n", prog);
+        exit(ABNORMAL_EXIT);
+    }
+
+    unsigned long pixel;
+    pixel = XGetPixel(samplePointImage, 0, 0);
+
+    color->red   = (pixel >> 16) & 0xff;
+    color->green = (pixel >> 8)  & 0xff;
+    color->blue  = (pixel >> 0)  & 0xff;
+
+    XDestroyImage(samplePointImage);
+
+    return color;
+}
+
+
+XImage* getSamplePointImage(Point samplePoint) {
+    return XGetImage(XDisplay, RootWindow(XDisplay, DefaultScreen(XDisplay)), samplePoint.x, samplePoint.y, 1, 1, AllPlanes, ZPixmap);
+}
+
+
+void blendPrevColors(XColor *color, int ledNum, unsigned char *prevLedData) {
+    color->red   = (color->red   * BLEND_WEIGHT + prevLedData[ledNum*3]   * FADE) >> 8;
+    color->green = (color->green * BLEND_WEIGHT + prevLedData[ledNum*3+1] * FADE) >> 8;
+    color->blue  = (color->blue  * BLEND_WEIGHT + prevLedData[ledNum*3+2] * FADE) >> 8;
+}
+
+
+void correctBrightness(XColor *color) {
+    // Boost pixels that fall below the minimum brightness
+    int brightnessDeficit;
+    int colorSum = color->red + color->green + color->blue;
+    
+    if(colorSum < MIN_BRIGHTNESS) {
+        // If all colors are 0, we'd divide by 0 so spread out the deficit equally instead
+        if(colorSum == 0) {
+            // Spread equally to R,G,B
+            brightnessDeficit = MIN_BRIGHTNESS / 3;
+
+            color->red   += brightnessDeficit;
+            color->green += brightnessDeficit;
+            color->blue  += brightnessDeficit;
+        } else {
+            // Spread the "brightness deficit" back into R,G,B in proportion to
+            // their individual contribition to that deficit.  Rather than simply
+            // boosting all pixels at the low end, this allows deep (but saturated)
+            // colors to stay saturated...they don't "pink out."
+            brightnessDeficit = MIN_BRIGHTNESS - colorSum;
+    
+            color->red   += brightnessDeficit * (colorSum - color->red)   / (colorSum*2);
+            color->green += brightnessDeficit * (colorSum - color->green) / (colorSum*2);
+            color->blue  += brightnessDeficit * (colorSum - color->blue)  / (colorSum*2);
+        }
+    }
+}
+
+
+void correctGamma(XColor *color) {
+    color->red   = gammaCorrection[color->red][0];
+    color->green = gammaCorrection[color->green][1];
+    color->blue  = gammaCorrection[color->blue][2];
 }
 
 
@@ -537,6 +696,7 @@ int processArgs(int argc, char **argv, char **device) {
             // Screen sampling
             case 'm':
                 isScreenSampling = 1;
+                fprintf(stderr, "%s: WARNING: Screen sampling does not work very well. Feel free to improve it and submit a pull request. :)\n", prog);
                 break;
             // No fork
             case 'F':

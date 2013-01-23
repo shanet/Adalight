@@ -10,14 +10,14 @@ LANG = c
 
 NAME        = colorswirl
 UPDATE_NAME = colorswirl_update
-VERSION     = "\"1.2.0\""
+VERSION     = "\"2.0.0\""
 
 BINARY        = $(NAME)
 UPDATE_BINARY = $(UPDATE_NAME)
 INIT_SCRIPT   = colorswirl
 SRC           = src/colorswirl.c src/usage.c
 UPDATE_SRC    = src/colorswirl_update.c src/usage.c
-LIBS          = -lm -lrt -pthread
+LIBS          = -lm -lrt -pthread -lX11
 
 MACROS = -DVERSION=$(VERSION) -DMQ_NAME="\"/$(NAME)\"" -D_GNU_SOURCE -DMAX_MSG_LEN=128
 CFLAGS = -std=c99 -Wall -Wextra

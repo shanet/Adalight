@@ -108,7 +108,7 @@ void setup()
   // to the first 25,000, so as not to be TOO time consuming) to red,
   // green, blue, then off.  Once you're confident everything is working
   // end-to-end, it's OK to comment this out and reprogram the Arduino.
-  uint8_t testcolor[] = { 0, 0, 0, 255, 0, 0 };
+  /*uint8_t testcolor[] = { 0, 0, 0, 255, 0, 0 };
   for(char n=3; n>=0; n--) {
     for(c=0; c<25000; c++) {
       for(i=0; i<3; i++) {
@@ -116,7 +116,7 @@ void setup()
       }
     }
     delay(1); // One millisecond pause = latch
-  }
+  }*/
 
   Serial.print("Ada\n"); // Send ACK string to host
 

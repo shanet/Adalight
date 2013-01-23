@@ -15,7 +15,7 @@ void printUsage(char *prog) {
     printf("Usage: %s [options] [device]\n", prog);
     
     printf("\t--color\t\t-c\t\tColor to use\n");
-    printf("\t\tSupported colors:\n\t\t  multi (default)\n\t\t  red\n\t\t  orange\n\t\t  yellow\n\t\t  green\n\t\t  blue\n\t\t  purple\n\t\t  white\n\n");
+    printf("\t\tSupported colors:\n\t\t  multi (default)\n\t\t  red\n\t\t  orange\n\t\t  yellow\n\t\t  green\n\t\t  blue\n\t\t  purple\n\t\t  white\n\t\t  cool\n\n");
     
     printf("\t--rotation\t-r\t\tRotation speed\n");
     printf("\t\tSupported rotation speeds:\n\t\t  n\tnone\n\t\t  vs\tvery_slow\n\t\t  s\tslow\n\t\t  \tnormal (default)\n\t\t  f\tfast\n\t\t  vf\tvery_fast\n\n");

@@ -22,6 +22,8 @@ arrangement for your specific configuration.
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
 
 #include <pthread.h>
 #include <signal.h>
@@ -87,30 +89,66 @@ arrangement for your specific configuration.
 #define SDW_LONG       4
 #define SDW_VERY_LONG  5
 
+// Sample options
+#define MIN_BRIGHTNESS 120
+#define FADE           75
+#define BLEND_WEIGHT   (257 - FADE)
 
-char *prog;                // Name of the program
-int verbose;               // Verbosity level
-int noFork;                // Flag for not forking on startup
-int isScreenSampling;      // Flag for sampling screen colors for LED color data
-static int color;          // Selected color
-static int rotationSpeed;  // Selected rotation speed
-static int rotationDir;    // Selected rotation direction
-static int shadowLength;   // Selected shadow length
-static int fadeSpeed;      // If the solid flag was selected
-static time_t curTime;     // The current time
-static time_t startTime;   // Time of program start
-static time_t prevTime;    // Previous current time
+
+typedef struct {
+    int x;
+    int y;
+} Point;
+
+
+char *prog;                    // Name of the program
+int verbose;                   // Verbosity level
+int screenWidth;               // Width of the screen
+int screenHeight;              // Height of the screen
+Point *samplePoints[NUM_LEDS]; // Pixel locations of the edges of each sample box
+Display *XDisplay;             // Connection to X11
+char gammaCorrection[256][3];  // Gamma correction table for sampled RGB values
+
+int noFork;           // Flag for not forking on startup
+int isScreenSampling; // Flag for sampling screen colors for LED color data
+int color;            // Selected color
+int rotationSpeed;    // Selected rotation speed
+int rotationDir;      // Selected rotation direction
+int shadowLength;     // Selected shadow length
+int fadeSpeed;        // If the solid flag was selected
+
+time_t curTime;   // The current time
+time_t startTime; // Time of program start
+time_t prevTime;  // Previous current time
 
 
 int processArgs(int argc, char **argv, char **device);
 void* messageLoop(void*);
+void startMessageThread(pthread_t *threadID);
+
 int openDevice(char *device);
+void getLedDataHeader(unsigned char *ledData);
+void sendLedDataToDevice(unsigned char *ledData, size_t ledDataLen, int deviceDescriptor);
+void updatePrevLedData(unsigned char *ledData, unsigned char *prevLedData, int ledDataLen);
+
 void getCalculatedLedData(unsigned char *ledData, size_t ledDataLen);
-void getSampledLedData(unsigned char *ledData, size_t ledDataLen);
+void getSampledLedData(unsigned char *ledData, unsigned char *prevLedData);
 void getLedColor(unsigned char *r, unsigned char *g, unsigned char *b, int curHue);
+
+void openXDisplay();
+void getScreenResolution();
+void calculateSamplePoints();
+XColor* getSamplePointColor(Point sampleBoxTopRightPoint);
+XImage* getSamplePointImage(Point sampleBoxTopRightPoint);
+
+void calculateGammaTable();
+void blendPrevColors(XColor *color, int ledNum, unsigned char *prevLedData);
+void correctBrightness(XColor *color);
+void correctGamma(XColor *color);
+
 void updateLightPosition(double *lightPosition);
 void updateShadowPosition(double *shadowPosition);
 void updateHue(int *curHue);
-void sendLedDataToDevice(unsigned char *ledData, size_t ledDataLen, int deviceDescriptor);
+
 void sigHandler(int sig);
 int installSigHandler(int sig, sighandler_t func);
