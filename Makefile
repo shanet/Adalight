@@ -5,8 +5,7 @@
 # Source:      https://github.com/shanet/Adalight
 # Forked from: https://github.com/adafruit/Adalight
 
-CC   = gcc
-LANG = c
+CC = gcc
 
 NAME        = colorswirl
 UPDATE_NAME = colorswirl_update
