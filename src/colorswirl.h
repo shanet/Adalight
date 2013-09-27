@@ -90,7 +90,7 @@ arrangement for your specific configuration.
 #define SDW_VERY_LONG  5
 
 // Sample options
-#define MIN_BRIGHTNESS 120
+#define MIN_BRIGHTNESS 200
 #define FADE           75
 #define BLEND_WEIGHT   (257 - FADE)
 
@@ -139,7 +139,8 @@ void openXDisplay();
 void getScreenResolution();
 void calculateSamplePoints();
 XColor* getSamplePointColor(Point sampleBoxTopRightPoint);
-XImage* getSamplePointImage(Point sampleBoxTopRightPoint);
+XImage* getSamplePointImage(Point sampleBoxTopRightPoint, int width, int height);
+int getModeOfColor(int *buckets, size_t numBuckets);
 
 void calculateGammaTable();
 void blendPrevColors(XColor *color, int ledNum, unsigned char *prevLedData);

@@ -177,7 +177,7 @@ void calculateSamplePoints() {
         }
 
         samplePoint->x = curX;
-        samplePoint->y = screenHeight/2;
+        samplePoint->y = 0;
 
         samplePoints[i] = samplePoint;
 
@@ -193,7 +193,6 @@ void calculateGammaTable() {
         gammaCorrection[i][0] = gamma * 255;
         gammaCorrection[i][1] = gamma * 240;
         gammaCorrection[i][2] = gamma * 220;
-        printf("%d: (%d, %d, %d)\n", i, gammaCorrection[i][0], gammaCorrection[i][1], gammaCorrection[i][2]);
     }
 }
 
@@ -266,17 +265,18 @@ void getSampledLedData(unsigned char *ledData, unsigned char *prevLedData) {
         correctBrightness(color);
         //correctGamma(color);
 
-        ledData[j--] = color->red;
-        ledData[j--] = color->green;
-        ledData[j--] = color->blue;
+        ledData[--j] = color->red;
+        ledData[--j] = color->green;
+        ledData[--j] = color->blue;
 
         XFree(color);
     }
 }
 
 
-XColor* getSamplePointColor(Point samplePoint) {
-    XImage *samplePointImage = getSamplePointImage(samplePoint);
+XColor* getSamplePointColor(Point sampleBoxTopRightPoint) {
+    int boxSize = screenWidth / NUM_LEDS;
+    XImage *samplePointImage = getSamplePointImage(sampleBoxTopRightPoint, boxSize, screenHeight);
 
     XColor *color = malloc(sizeof(XColor));
     if(color == NULL) {
@@ -284,21 +284,54 @@ XColor* getSamplePointColor(Point samplePoint) {
         exit(ABNORMAL_EXIT);
     }
 
-    unsigned long pixel;
-    pixel = XGetPixel(samplePointImage, 0, 0);
+    int *bucketsRed = calloc(255, sizeof(int));
+    int *bucketsGreen = calloc(255, sizeof(int));
+    int *bucketsBlue = calloc(255, sizeof(int));
 
-    color->red   = (pixel >> 16) & 0xff;
-    color->green = (pixel >> 8)  & 0xff;
-    color->blue  = (pixel >> 0)  & 0xff;
+    for(int i=0; i<boxSize; i++) {
+        for(int j=0; j<screenHeight; j+=10) {
+            unsigned long pixel = XGetPixel(samplePointImage, i, j);
+
+            int red = (pixel >> 16) & 0xff;
+            int green = (pixel >> 8)  & 0xff;
+            int blue  = (pixel >> 0)  & 0xff;
+
+            bucketsRed[red]++;
+            bucketsGreen[green]++;
+            bucketsBlue[blue]++;
+        }
+    }
+
+    color->red   = getModeOfColor(bucketsRed, 255);
+    color->green = getModeOfColor(bucketsGreen, 255);
+    color->blue  = getModeOfColor(bucketsBlue, 255);
+
+    free(bucketsRed);
+    free(bucketsGreen);
+    free(bucketsBlue);
 
     XDestroyImage(samplePointImage);
 
     return color;
 }
 
+XImage* getSamplePointImage(Point sampleBoxTopRightPoint, int width, int height) {
+    return XGetImage(XDisplay, RootWindow(XDisplay, DefaultScreen(XDisplay)), sampleBoxTopRightPoint.x, sampleBoxTopRightPoint.y, width, height, AllPlanes, ZPixmap);
+}
 
-XImage* getSamplePointImage(Point samplePoint) {
-    return XGetImage(XDisplay, RootWindow(XDisplay, DefaultScreen(XDisplay)), samplePoint.x, samplePoint.y, 1, 1, AllPlanes, ZPixmap);
+
+int getModeOfColor(int *buckets, size_t numBuckets) {
+    int max = buckets[0];
+    int maxIndex = 0;
+
+    for(unsigned int i=0; i<numBuckets; i++) {
+        if(buckets[i] > max) {
+            max = buckets[i];
+            maxIndex = i;
+        }
+    }
+
+    return maxIndex;
 }
 
 
