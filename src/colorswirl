@@ -7,7 +7,7 @@
 
 ### BEGIN INIT INFO
 # Provides:          colorswirl
-# Required-Start:    
+# Required-Start:
 # Required-Stop:
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
@@ -20,7 +20,6 @@ BINARY=colorswirl
 ARGS="--color=multi --solid"
 USER=root
 
-export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
 
 start() {
         echo "Starting $BINARY..."

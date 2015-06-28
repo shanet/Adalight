@@ -1,0 +1,8 @@
+[Unit]
+Description=Sends color info to Arduino for LED's
+
+[Service]
+ExecStart=/usr/sbin/local/colorswirl --no-fork --color=multi --solid
+
+[Install]
+WantedBy=multi-user.target

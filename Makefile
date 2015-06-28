@@ -11,12 +11,13 @@ NAME        = colorswirl
 UPDATE_NAME = colorswirl_update
 VERSION     = "\"2.0.0\""
 
-BINARY        = $(NAME)
-UPDATE_BINARY = $(UPDATE_NAME)
-INIT_SCRIPT   = colorswirl
-SRC           = src/colorswirl.c src/usage.c
-UPDATE_SRC    = src/colorswirl_update.c src/usage.c
-LIBS          = -lm -lrt -pthread -lX11
+BINARY         = $(NAME)
+UPDATE_BINARY  = $(UPDATE_NAME)
+INSTALL_DIR    = /usr/sbin/local
+SYSTEMD_SCRIPT = colorswirl.service
+SRC            = src/colorswirl.c src/usage.c
+UPDATE_SRC     = src/colorswirl_update.c src/usage.c
+LIBS           = -lm -lrt -pthread -lX11
 
 MACROS = -DVERSION=$(VERSION) -DMQ_NAME="\"/$(NAME)\"" -D_GNU_SOURCE -DMAX_MSG_LEN=128
 CFLAGS = -std=c99 -Wall -Wextra
@@ -39,15 +40,14 @@ colorswirl_update:
 	$(CC) $(CFLAGS) $(MACROS) $(UPDATE_SRC) -o bin/$(UPDATE_BINARY) $(LIBS)
 
 install:
-	cp bin/$(BINARY) /usr/sbin/
-	cp bin/$(UPDATE_BINARY) /usr/sbin
-	cp src/$(INIT_SCRIPT) /etc/init.d/$(INIT_SCRIPT)
-	chmod 744 /etc/init.d/$(INIT_SCRIPT)
-	update-rc.d $(INIT_SCRIPT) defaults
+	mkdir -p $(INSTALL_DIR)
+	cp bin/$(BINARY) $(INSTALL_DIR)/
+	cp bin/$(UPDATE_BINARY) $(INSTALL_DIR)
+	cp src/$(SYSTEMD_SCRIPT) /etc/systemd/system/
 
 remove:
-	rm -f /usr/sbin/$(BINARY)
-	rm -f /usr/sbin/$(UPDATE_BINARY)
+	rm -f $(INSTALL_DIR)/$(BINARY)
+	rm -f $(INSTALL_DIR)/$(UPDATE_BINARY)
 
 clean:
 	rm -f bin/$(BINARY) bin/$(UPDATE_BINARY) src/*.o
