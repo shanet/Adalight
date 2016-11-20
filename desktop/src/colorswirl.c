@@ -7,12 +7,12 @@
  * Source:      https://github.com/shanet/Adalight
  * Forked from: https://github.com/adafruit/Adalight
  *
- * This is the host PC-side code written in C; intended for use with a 
- * USB-connected Arduino microcontroller running the accompanying LED 
- * streaming code.  Requires one strand of  Digital RGB LED Pixels 
- * (Adafruit product ID #322, specifically the newer WS2801-based 
- * type, strand of 25) and a 5 Volt power supply (such as 
- * Adafruit #276).  You may need to adapt the code and  the hardware 
+ * This is the host PC-side code written in C; intended for use with a
+ * USB-connected Arduino microcontroller running the accompanying LED
+ * streaming code.  Requires one strand of  Digital RGB LED Pixels
+ * (Adafruit product ID #322, specifically the newer WS2801-based
+ * type, strand of 25) and a 5 Volt power supply (such as
+ * Adafruit #276).  You may need to adapt the code and  the hardware
  * arrangement for your specific configuration.
  *
  */
@@ -27,8 +27,8 @@ int main(int argc, char **argv) {
 
     // LED color info to send to the device
     // Size is 6 byte header + 3 bytes per LED
-    unsigned char ledData[6 + (NUM_LEDS * 3)]; 
-    unsigned char prevLedData[6 + (NUM_LEDS * 3)]; 
+    unsigned char ledData[6 + (NUM_LEDS * 3)];
+    unsigned char prevLedData[6 + (NUM_LEDS * 3)];
 
     // Init globals
     prog             = argv[0];
@@ -170,7 +170,7 @@ void calculateSamplePoints() {
     int curX = 0;
     for(int i=0; i<NUM_LEDS; i++) {
         Point *samplePoint = malloc(sizeof(Point));
-        
+
         if(samplePoint == NULL) {
             fprintf(stderr, "%s: Failed to allocate memory.\n", prog);
             exit(ABNORMAL_EXIT);
@@ -260,7 +260,7 @@ void getSampledLedData(unsigned char *ledData, unsigned char *prevLedData) {
     // For the LED data index (j), start at position 6, after the LED header/magic word
     for(unsigned int i=0, j=NUM_LEDS*3; i<NUM_LEDS && j > 6; i++) {
         XColor *color = getSamplePointColor(*(samplePoints[i]));
-           
+
         blendPrevColors(color, i, prevLedData);
         correctBrightness(color);
         //correctGamma(color);
@@ -346,7 +346,7 @@ void correctBrightness(XColor *color) {
     // Boost pixels that fall below the minimum brightness
     int brightnessDeficit;
     int colorSum = color->red + color->green + color->blue;
-    
+
     if(colorSum < MIN_BRIGHTNESS) {
         // If all colors are 0, we'd divide by 0 so spread out the deficit equally instead
         if(colorSum == 0) {
@@ -362,7 +362,7 @@ void correctBrightness(XColor *color) {
             // boosting all pixels at the low end, this allows deep (but saturated)
             // colors to stay saturated...they don't "pink out."
             brightnessDeficit = MIN_BRIGHTNESS - colorSum;
-    
+
             color->red   += brightnessDeficit * (colorSum - color->red)   / (colorSum*2);
             color->green += brightnessDeficit * (colorSum - color->green) / (colorSum*2);
             color->blue  += brightnessDeficit * (colorSum - color->blue)  / (colorSum*2);
@@ -877,7 +877,7 @@ void sigHandler(int sig) {
 
 int installSigHandler(int sig, sighandler_t func) {
     struct sigaction sigact;
-    
+
     sigact.sa_handler = func;
     sigemptyset(&sigact.sa_mask);
     sigact.sa_flags = SA_RESTART;

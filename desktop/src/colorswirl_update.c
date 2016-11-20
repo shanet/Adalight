@@ -8,7 +8,7 @@
  * Forked from: https://github.com/adafruit/Adalight
  *
  * This is a helper program that allows for the dynamic updating of colorswirl options
- * without restarting the colorswirl process. It simply passes it's arguments off to 
+ * without restarting the colorswirl process. It simply passes it's arguments off to
  * colorswirl via the message queue.
  *
  */
@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
         printVersion(*argv);
         return 0;
     }
-    
+
     // Set the max message length as MAX_MSG_LEN
     struct mq_attr attr = {
         .mq_flags = 0,

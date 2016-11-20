@@ -1,3 +1,2 @@
-bin/colorswirl
-bin/colorswirl_update
-src/*.o
+desktop/bin/colorswirl
+desktop/bin/colorswirl_update
